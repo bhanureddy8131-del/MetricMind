@@ -1,0 +1,109 @@
+# Semantic Layer - Dimensions Definition
+# Defines all available dimensions (attributes) that can filter and group results
+
+dimensions:
+  region:
+    display_name: "Region"
+    column_name: "region"
+    description: "Geographic sales region"
+    data_type: "string"
+
+  country:
+    display_name: "Country"
+    column_name: "country"
+    description: "Country of sale"
+    data_type: "string"
+
+  state:
+    display_name: "State"
+    column_name: "state"
+    description: "State of sale"
+    data_type: "string"
+
+  city:
+    display_name: "City"
+    column_name: "city"
+    description: "City of sale"
+    data_type: "string"
+
+  category:
+    display_name: "Category"
+    column_name: "category"
+    description: "Product category"
+    data_type: "string"
+
+  sub_category:
+    display_name: "Sub-Category"
+    column_name: "sub_category"
+    description: "Product sub-category"
+    data_type: "string"
+
+  product_name:
+    display_name: "Product"
+    column_name: "product_name"
+    description: "Product name"
+    data_type: "string"
+
+  segment:
+    display_name: "Customer Segment"
+    column_name: "segment"
+    description: "Customer segment (Consumer, Corporate, Home Office)"
+    data_type: "string"
+
+  ship_mode:
+    display_name: "Ship Mode"
+    column_name: "ship_mode"
+    description: "Shipping method"
+    data_type: "string"
+
+  order_date:
+    display_name: "Order Date"
+    column_name: "order_date"
+    description: "Date when order was placed"
+    data_type: "date"
+
+  ship_date:
+    display_name: "Ship Date"
+    column_name: "ship_date"
+    description: "Date when order was shipped"
+    data_type: "date"
+
+  # Temporal dimensions (derived from order_date)
+  year:
+    display_name: "Year"
+    column_name: "CAST(STRFTIME('%Y', order_date) AS INTEGER)"
+    description: "Year of order"
+    data_type: "integer"
+    derived: true
+
+  month:
+    display_name: "Month"
+    column_name: "CAST(STRFTIME('%m', order_date) AS INTEGER)"
+    description: "Month of order (1-12)"
+    data_type: "integer"
+    derived: true
+
+  quarter:
+    display_name: "Quarter"
+    column_name: "CAST(STRFTIME('%m', order_date) / 3 + 1 AS INTEGER)"
+    description: "Quarter of order (1-4)"
+    data_type: "integer"
+    derived: true
+
+  customer_id:
+    display_name: "Customer ID"
+    column_name: "customer_id"
+    description: "Unique customer identifier"
+    data_type: "string"
+
+  order_id:
+    display_name: "Order ID"
+    column_name: "order_id"
+    description: "Unique order identifier"
+    data_type: "string"
+
+  product_id:
+    display_name: "Product ID"
+    column_name: "product_id"
+    description: "Unique product identifier"
+    data_type: "string"
