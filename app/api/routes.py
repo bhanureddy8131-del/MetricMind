@@ -21,7 +21,6 @@ from app.semantic_layer.loader import semantic_layer
 from app.services.query_service import QueryService
 from app.services.analysis_service import AnalysisService
 from app.agent.agent import get_agent
-from app.agent.tools import AgentTools
 from app.sql.generator import SQLGenerator
 
 logger = logging.getLogger(__name__)
