@@ -8,10 +8,10 @@ Usage:
 import os
 import sys
 import argparse
+import csv
 import logging
 from pathlib import Path
-import pandas as pd
-from datetime import datetime
+from datetime import date
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -37,11 +37,19 @@ def load_csv_data(csv_file: str, db=None, overwrite: bool = False):
 
     logger.info(f"Loading data from: {csv_file}")
 
-    # Read CSV
+    # Read CSV with the standard library so loading works without a binary data stack.
     existing_count = 0
     try:
-        df = pd.read_csv(csv_file)
-        logger.info(f"Read {len(df)} rows from CSV")
+        with open(csv_file, "r", encoding="utf-8-sig", newline="") as csv_handle:
+            csv_reader = csv.reader(csv_handle)
+            headers = next(csv_reader, [])
+            rows = []
+            for raw_row in csv_reader:
+                if len(raw_row) > len(headers):
+                    raw_row = raw_row[:16] + [", ".join(raw_row[16:-4])] + raw_row[-4:]
+                if len(raw_row) == len(headers):
+                    rows.append(dict(zip(headers, raw_row)))
+        logger.info(f"Read {len(rows)} rows from CSV")
     except Exception as e:
         logger.error(f"Error reading CSV: {e}")
         return {"status": "read_error", "loaded": 0, "existing": 0}
@@ -66,17 +74,17 @@ def load_csv_data(csv_file: str, db=None, overwrite: bool = False):
 
         # Prepare data
         records = []
-        for idx, row in df.iterrows():
+        for idx, row in enumerate(rows):
             try:
                 # Parse dates
-                order_date = pd.to_datetime(row.get("order_date"))
-                ship_date = pd.to_datetime(row.get("ship_date")) if pd.notna(row.get("ship_date")) else None
+                order_date = _parse_date(row.get("order_date"))
+                ship_date = _parse_date(row.get("ship_date"))
 
                 record = SalesRecord(
                     row_id=int(row.get("row_id", idx + 1)),
                     order_id=str(row.get("order_id", "")),
-                    order_date=order_date.date() if order_date else None,
-                    ship_date=ship_date.date() if ship_date else None,
+                    order_date=order_date,
+                    ship_date=ship_date,
                     ship_mode=str(row.get("ship_mode", "")),
                     customer_id=str(row.get("customer_id", "")),
                     customer_name=str(row.get("customer_name", "")),
@@ -91,9 +99,9 @@ def load_csv_data(csv_file: str, db=None, overwrite: bool = False):
                     sub_category=str(row.get("sub_category", "")),
                     product_name=str(row.get("product_name", "")),
                     sales=float(row.get("sales", 0)),
-                    quantity=int(row.get("quantity", 0)) if pd.notna(row.get("quantity")) else 0,
-                    discount=float(row.get("discount", 0)) if pd.notna(row.get("discount")) else 0,
-                    profit=float(row.get("profit", 0)) if pd.notna(row.get("profit")) else 0,
+                    quantity=_to_int(row.get("quantity")),
+                    discount=_to_float(row.get("discount")),
+                    profit=_to_float(row.get("profit")),
                 )
                 records.append(record)
             except Exception as e:
@@ -128,6 +136,19 @@ def load_csv_data(csv_file: str, db=None, overwrite: bool = False):
     finally:
         if should_close_db:
             db.close()
+
+
+def _parse_date(value: str | None) -> date | None:
+    """Parse an ISO date while treating empty CSV cells as null."""
+    return date.fromisoformat(value.strip()) if value and value.strip() else None
+
+
+def _to_float(value: str | None) -> float:
+    return float(value) if value and value.strip() else 0.0
+
+
+def _to_int(value: str | None) -> int:
+    return int(float(value)) if value and value.strip() else 0
 
 
 def main():

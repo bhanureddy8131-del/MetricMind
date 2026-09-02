@@ -78,9 +78,16 @@ async def root():
         "docs": "/docs",
         "endpoints": {
             "health": "GET /api/health",
+            "status": "GET /api/status",
+            "data_load": "POST /api/data/load",
             "metrics": "GET /api/metrics",
             "dimensions": "GET /api/dimensions",
             "query": "POST /api/query",
+            "sql_generate": "POST /api/sql/generate",
+            "sql_validate": "POST /api/sql/validate",
+            "analysis": "POST /api/analysis",
+            "agent_intent": "POST /api/agent/intent",
+            "agent_tools": "GET /api/agent/tools",
         },
     }
 
