@@ -1,0 +1,67 @@
+# Semantic Layer - Metrics Definition
+# Defines all available metrics that can be queried
+# Each metric has a name, SQL formula, and description
+
+metrics:
+  revenue:
+    display_name: "Revenue"
+    sql_expression: "SUM(sales)"
+    description: "Total sales revenue"
+    data_type: "numeric"
+    aggregation: "sum"
+
+  profit:
+    display_name: "Profit"
+    sql_expression: "SUM(profit)"
+    description: "Total profit"
+    data_type: "numeric"
+    aggregation: "sum"
+
+  margin:
+    display_name: "Profit Margin"
+    sql_expression: "ROUND(SUM(profit) / NULLIF(SUM(sales), 0) * 100, 2)"
+    description: "Profit margin percentage"
+    data_type: "numeric"
+    aggregation: "calculated"
+
+  orders:
+    display_name: "Orders"
+    sql_expression: "COUNT(DISTINCT order_id)"
+    description: "Number of unique orders"
+    data_type: "integer"
+    aggregation: "count_distinct"
+
+  customers:
+    display_name: "Customers"
+    sql_expression: "COUNT(DISTINCT customer_id)"
+    description: "Number of unique customers"
+    data_type: "integer"
+    aggregation: "count_distinct"
+
+  quantity:
+    display_name: "Quantity"
+    sql_expression: "SUM(quantity)"
+    description: "Total quantity ordered"
+    data_type: "integer"
+    aggregation: "sum"
+
+  average_order_value:
+    display_name: "Average Order Value"
+    sql_expression: "ROUND(SUM(sales) / NULLIF(COUNT(DISTINCT order_id), 0), 2)"
+    description: "Average revenue per order"
+    data_type: "numeric"
+    aggregation: "calculated"
+
+  avg_discount:
+    display_name: "Average Discount"
+    sql_expression: "ROUND(AVG(discount), 2)"
+    description: "Average discount applied"
+    data_type: "numeric"
+    aggregation: "avg"
+
+  discount_amount:
+    display_name: "Total Discount"
+    sql_expression: "ROUND(SUM(sales * discount), 2)"
+    description: "Total discount given"
+    data_type: "numeric"
+    aggregation: "sum"

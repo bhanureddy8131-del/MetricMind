@@ -3,10 +3,21 @@ Database Models
 Defines the SQLAlchemy models for the Superstore data.
 """
 from sqlalchemy import Column, Integer, String, Float, Date, Index
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.ext.declarative import declarative_base
-from datetime import datetime
+from datetime import date, datetime
 
 Base = declarative_base()
+
+
+class FlexibleDate(TypeDecorator):
+    impl = Date
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if isinstance(value, str):
+            return date.fromisoformat(value)
+        return value
 
 
 class SalesRecord(Base):
@@ -18,8 +29,8 @@ class SalesRecord(Base):
 
     row_id = Column(Integer, primary_key=True, index=True)
     order_id = Column(String(50), index=True, nullable=False)
-    order_date = Column(Date, index=True, nullable=False)
-    ship_date = Column(Date)
+    order_date = Column(FlexibleDate, index=True, nullable=False)
+    ship_date = Column(FlexibleDate)
     ship_mode = Column(String(50))
     customer_id = Column(String(50), index=True, nullable=False)
     customer_name = Column(String(255))
