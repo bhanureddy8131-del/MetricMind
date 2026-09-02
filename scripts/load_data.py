@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def load_csv_data(csv_file: str, db=None):
+def load_csv_data(csv_file: str, db=None, overwrite: bool = False):
     """
     Load CSV data into the database.
 
@@ -33,17 +33,18 @@ def load_csv_data(csv_file: str, db=None):
     """
     if not os.path.exists(csv_file):
         logger.error(f"CSV file not found: {csv_file}")
-        return
+        return {"status": "not_found", "loaded": 0, "existing": 0}
 
     logger.info(f"Loading data from: {csv_file}")
 
     # Read CSV
+    existing_count = 0
     try:
         df = pd.read_csv(csv_file)
         logger.info(f"Read {len(df)} rows from CSV")
     except Exception as e:
         logger.error(f"Error reading CSV: {e}")
-        return
+        return {"status": "read_error", "loaded": 0, "existing": 0}
 
     # Create database session if not provided
     should_close_db = False
@@ -56,14 +57,12 @@ def load_csv_data(csv_file: str, db=None):
         existing_count = db.query(SalesRecord).count()
         if existing_count > 0:
             logger.info(f"Database already contains {existing_count} records")
-            response = input("Overwrite existing data? (yes/no): ").lower()
-            if response != "yes":
+            if not overwrite:
                 logger.info("Loading cancelled")
-                return
-            else:
-                db.query(SalesRecord).delete()
-                db.commit()
-                logger.info("Cleared existing data")
+                return {"status": "already_loaded", "loaded": 0, "existing": existing_count}
+            db.query(SalesRecord).delete()
+            db.commit()
+            logger.info("Cleared existing data")
 
         # Prepare data
         records = []
@@ -117,12 +116,15 @@ def load_csv_data(csv_file: str, db=None):
             logger.info("Sample records:")
             for record in summary:
                 logger.info(f"  {record}")
+            return {"status": "loaded", "loaded": len(records), "existing": 0}
         else:
             logger.warning("No records to insert")
+            return {"status": "empty", "loaded": 0, "existing": 0}
 
     except Exception as e:
         logger.error(f"Error loading data: {e}")
         db.rollback()
+        return {"status": "error", "loaded": 0, "existing": existing_count}
     finally:
         if should_close_db:
             db.close()

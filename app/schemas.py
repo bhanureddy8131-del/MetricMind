@@ -2,7 +2,7 @@
 Pydantic Schemas
 Defines request/response schemas for API validation and documentation.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict, Any, Optional
 from enum import Enum
 
@@ -16,10 +16,61 @@ class QueryRequest(BaseModel):
         example="Which region has the highest profit?",
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {"question": "What is our total revenue by region?"}
         }
+    )
+
+
+class SQLGenerateRequest(BaseModel):
+    """Request model for generating a validated semantic-layer query."""
+
+    metrics: List[str] = Field(..., min_length=1)
+    dimensions: List[str] = Field(default_factory=list)
+    filters: Dict[str, Any] = Field(default_factory=dict)
+    order_by: Optional[str] = None
+    limit: int = Field(default=100, ge=1, le=100000)
+
+
+class SQLGenerateResponse(BaseModel):
+    sql: str
+    valid: bool
+
+
+class SQLValidateRequest(BaseModel):
+    sql: str = Field(..., min_length=1, max_length=5000)
+
+
+class SQLValidateResponse(BaseModel):
+    valid: bool
+    error: Optional[str] = None
+
+
+class DataLoadRequest(BaseModel):
+    file_path: Optional[str] = None
+    overwrite: bool = False
+
+
+class DataLoadResponse(BaseModel):
+    status: str
+    loaded: int
+    existing: int
+
+
+class AgentIntentRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=1000)
+
+
+class AnalysisRequest(BaseModel):
+    data: List[Dict[str, Any]] = Field(default_factory=list)
+    metrics: List[str] = Field(default_factory=list)
+    dimensions: List[str] = Field(default_factory=list)
+
+
+class AnalysisResponse(BaseModel):
+    insights: List[str]
+    quality: Dict[str, Any]
 
 
 class ChartConfig(BaseModel):
@@ -88,8 +139,8 @@ class QueryResponse(BaseModel):
     )
     row_count: int = Field(..., description="Number of rows in results")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "question": "Which region has the highest profit?",
                 "answer": "The West region has the highest profit with $108,418.45.",
@@ -109,6 +160,7 @@ class QueryResponse(BaseModel):
                 "row_count": 4,
             }
         }
+    )
 
 
 class HealthResponse(BaseModel):
