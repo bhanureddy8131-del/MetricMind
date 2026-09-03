@@ -57,3 +57,4 @@ Thumbs.db
 # Data files (unless they're samples)
 data/*.csv
 !data/MetricMind_Superstore_Sample.csv
+node_modules/

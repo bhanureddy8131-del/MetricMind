@@ -1,0 +1,8 @@
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+
+export default function ChartCard({ title, data = [], type = 'bar', xKey, yKey, color = '#5b5ce2' }) {
+  const keys = data[0] ? Object.keys(data[0]) : []
+  const x = xKey || keys.find((key) => typeof data[0]?.[key] !== 'number') || keys[0]
+  const y = yKey || keys.find((key) => typeof data[0]?.[key] === 'number') || keys[1]
+  return <section className="panel chart-panel"><div className="panel-heading"><div><h3>{title}</h3><span>{data.length ? `${data.length} data points` : 'Awaiting data'}</span></div></div>{data.length ? <div className="chart"><ResponsiveContainer width="100%" height="100%">{type === 'line' ? <LineChart data={data}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" /><XAxis dataKey={x} tickLine={false} axisLine={false} /><YAxis tickLine={false} axisLine={false} /><Tooltip /><Line type="monotone" dataKey={y} stroke={color} strokeWidth={3} dot={false} /></LineChart> : type === 'pie' ? <PieChart><Pie data={data} dataKey={y} nameKey={x} innerRadius={55} outerRadius={88} paddingAngle={3}>{data.map((_, index) => <Cell key={index} fill={['#5b5ce2', '#0ea5a4', '#f59e0b', '#ef6c8f'][index % 4]} />)}</Pie><Tooltip /></PieChart> : <BarChart data={data}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" /><XAxis dataKey={x} tickLine={false} axisLine={false} /><YAxis tickLine={false} axisLine={false} /><Tooltip /><Bar dataKey={y} fill={color} radius={[5, 5, 0, 0]} /></BarChart>}</ResponsiveContainer></div> : <div className="empty-state">Run an AI query to populate this chart.</div>}</section>
+}

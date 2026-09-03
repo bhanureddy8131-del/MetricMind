@@ -1,0 +1,3 @@
+import { Bell, Menu, Search } from 'lucide-react'
+import { useAuth } from '../context/useAuth'
+export default function Navbar({ onMenu }) { const { user } = useAuth(); return <header className="navbar"><button className="icon-button mobile-menu" onClick={onMenu}><Menu size={20} /></button><div className="search-box"><Search size={17} /><input placeholder="Search workspace" aria-label="Search workspace" /></div><div className="nav-actions"><button className="icon-button"><Bell size={19} /></button><div className="avatar">{user?.name?.slice(0, 1).toUpperCase() || 'M'}</div><div className="profile"><strong>{user?.name || 'Analyst'}</strong><span>Workspace member</span></div></div></header> }
