@@ -10,6 +10,9 @@ from fastapi.responses import JSONResponse
 
 from app.database import init_db
 from app.api import routes
+from app.api.auth import router as auth_router
+from app.api.data import router as data_router
+from app.api.analytics import router as analytics_router
 
 # Configure logging
 logging.basicConfig(
@@ -25,17 +28,29 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Add CORS middleware for frontend integration
+# Configure CORS for frontend
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to specific origins
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
 # Include API routes
 app.include_router(routes.router)
+app.include_router(auth_router)
+app.include_router(data_router)
+app.include_router(analytics_router)
 
 
 # Event handlers

@@ -2,10 +2,60 @@
 Pydantic Schemas
 Defines request/response schemas for API validation and documentation.
 """
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Dict, Any, Optional
 from enum import Enum
+from datetime import datetime
 
+
+# ============================================================================
+# AUTHENTICATION SCHEMAS
+# ============================================================================
+
+class LoginRequest(BaseModel):
+    """Request model for login endpoint."""
+    email: EmailStr = Field(..., description="User email address")
+    password: str = Field(..., min_length=6, description="User password")
+
+
+class RegisterRequest(BaseModel):
+    """Request model for registration endpoint."""
+    full_name: str = Field(..., min_length=2, max_length=255)
+    username: str = Field(..., min_length=3, max_length=100)
+    email: EmailStr
+    password: str = Field(..., min_length=8, description="Password must be at least 8 characters")
+    
+    
+class UserResponse(BaseModel):
+    """User information response."""
+    id: int
+    username: str
+    email: str
+    full_name: Optional[str]
+    role: str
+    is_active: bool
+    created_at: datetime
+    last_login: Optional[datetime]
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TokenResponse(BaseModel):
+    """Authentication token response."""
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserResponse
+
+
+class LogoutRequest(BaseModel):
+    """Request model for logout."""
+    pass
+
+
+# ============================================================================
+# QUERY & ANALYSIS SCHEMAS
+# ============================================================================
 
 class QueryRequest(BaseModel):
     """Request model for the /api/query endpoint."""
@@ -190,3 +240,95 @@ class ErrorResponse(BaseModel):
     error: str = Field(..., description="Error message")
     details: Optional[str] = Field(None, description="Additional details")
     code: Optional[str] = Field(None, description="Error code")
+
+
+# ============================================================================
+# DATA MANAGEMENT SCHEMAS
+# ============================================================================
+
+class SalesRecordResponse(BaseModel):
+    """Sales record response."""
+    row_id: int
+    order_id: str
+    order_date: str
+    customer_id: str
+    customer_name: Optional[str]
+    region: str
+    category: str
+    sub_category: Optional[str]
+    product_name: Optional[str]
+    sales: float
+    quantity: int
+    profit: float
+    discount: Optional[float]
+    segment: Optional[str]
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SalesRecordCreateRequest(BaseModel):
+    """Request to create a sales record."""
+    order_id: str
+    order_date: str
+    customer_id: str
+    customer_name: str
+    region: str
+    category: str
+    sub_category: Optional[str]
+    product_name: str
+    sales: float
+    quantity: int
+    profit: float
+    discount: Optional[float] = 0.0
+    segment: Optional[str]
+
+
+class PaginatedResponse(BaseModel):
+    """Generic paginated response."""
+    data: List[Dict[str, Any]]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class DashboardKPIsResponse(BaseModel):
+    """Dashboard KPI response."""
+    total_sales: float
+    total_profit: float
+    total_orders: int
+    total_customers: int
+    total_quantity: int
+    average_order_value: float
+    profit_margin: float
+    currency: str = "USD"
+
+
+class LoginActivityResponse(BaseModel):
+    """Login activity record."""
+    id: int
+    user_id: int
+    action: str
+    login_time: datetime
+    logout_time: Optional[datetime]
+    ip_address: Optional[str]
+    status: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class QueryHistoryResponse(BaseModel):
+    """Query history record."""
+    id: int
+    user_id: int
+    question: str
+    metrics: Optional[str]
+    dimensions: Optional[str]
+    sql_query: Optional[str]
+    result_rows: int
+    execution_time_ms: float
+    status: str
+    error_message: Optional[str]
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
