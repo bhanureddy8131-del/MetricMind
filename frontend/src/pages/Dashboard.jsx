@@ -6,11 +6,12 @@ import {
   Layers3,
   MessageSquare,
   Sparkles,
-  Server,
   ShoppingCart,
   Users,
   RefreshCw,
-  BarChart3
+  TrendingUp,
+  BarChart3,
+  PieChart
 } from 'lucide-react'
 
 import { apiService } from '../services/api'
@@ -25,28 +26,29 @@ export default function Dashboard() {
 
   const [state, setState] = useState({
     loading: true,
+    refreshing: false,
     error: '',
     kpis: null,
     status: null,
     metrics: null,
     dimensions: null,
-    salesByRegion: null,
-    topProducts: null
+    salesByRegion: [],
+    topProducts: [],
+    revenueByRegion: [],
+    salesByCategory: [],
+    revenueTrend: [],
+    profitTrend: []
   })
-
-  const [refreshing, setRefreshing] = useState(false)
 
   const fetchDashboardData = async (isRefresh = false) => {
     try {
-      if (isRefresh) {
-        setRefreshing(true)
-      } else {
-        setState((current) => ({
-          ...current,
-          loading: true,
-          error: ''
-        }))
-      }
+      setState((current) => ({
+        ...current,
+        ...(isRefresh
+          ? { refreshing: true }
+          : { loading: true }),
+        error: ''
+      }))
 
       const [
         status,
@@ -64,15 +66,88 @@ export default function Dashboard() {
         apiService.getTopProducts(10)
       ])
 
+      const region = regionData?.data || []
+      const products = topProducts?.data || []
+
+      /*
+       * Convert backend region data into formats usable by
+       * bar and pie charts.
+       */
+      const revenueByRegion = region.map((item) => ({
+        region:
+          item.region ||
+          item.Region ||
+          item.name ||
+          'Unknown',
+        revenue:
+          Number(
+            item.revenue ??
+            item.sales ??
+            item.total_sales ??
+            item.value ??
+            0
+          )
+      }))
+
+      /*
+       * If the backend returns category information through
+       * metrics/dimensions, use it. Otherwise keep an empty
+       * array instead of creating fake data.
+       */
+      let salesByCategory = []
+
+      if (Array.isArray(metrics?.data)) {
+        salesByCategory = metrics.data
+          .filter(
+            (item) =>
+              item.category ||
+              item.Category ||
+              item.name
+          )
+          .map((item) => ({
+            category:
+              item.category ||
+              item.Category ||
+              item.name ||
+              'Unknown',
+            sales: Number(
+              item.sales ??
+              item.revenue ??
+              item.total_sales ??
+              item.value ??
+              0
+            )
+          }))
+      }
+
+      /*
+       * Do not create fake trend data.
+       * These arrays will be populated if your backend
+       * provides trend information.
+       */
+      const revenueTrend =
+        kpis?.data?.revenue_trend ||
+        kpis?.data?.sales_trend ||
+        []
+
+      const profitTrend =
+        kpis?.data?.profit_trend ||
+        []
+
       setState({
         loading: false,
+        refreshing: false,
         error: '',
         status: status?.data || null,
         kpis: kpis?.data || null,
         metrics: metrics?.data || null,
         dimensions: dimensions?.data || null,
-        salesByRegion: regionData?.data || [],
-        topProducts: topProducts?.data || []
+        salesByRegion: region,
+        topProducts: products,
+        revenueByRegion,
+        salesByCategory,
+        revenueTrend,
+        profitTrend
       })
     } catch (error) {
       console.error('Dashboard error:', error)
@@ -80,13 +155,12 @@ export default function Dashboard() {
       setState((current) => ({
         ...current,
         loading: false,
+        refreshing: false,
         error:
           error?.response?.data?.detail ||
           error?.message ||
           'Unable to load dashboard data.'
       }))
-    } finally {
-      setRefreshing(false)
     }
   }
 
@@ -95,7 +169,7 @@ export default function Dashboard() {
   }, [])
 
   if (state.loading) {
-    return <LoadingSpinner label="Loading MetricMind dashboard..." />
+    return <LoadingSpinner label="Loading dashboard" />
   }
 
   const kpis = state.kpis || {
@@ -105,135 +179,148 @@ export default function Dashboard() {
     total_customers: 0
   }
 
-  const formatCurrency = (value) => {
-    return `$${Number(value || 0).toLocaleString('en-US', {
+  const totalRevenue =
+    Number(
+      kpis.total_revenue ??
+      kpis.total_sales ??
+      0
+    )
+
+  const totalProfit =
+    Number(kpis.total_profit ?? 0)
+
+  const totalOrders =
+    Number(kpis.total_orders ?? 0)
+
+  const totalCustomers =
+    Number(kpis.total_customers ?? 0)
+
+  const formatCurrency = (value) =>
+    `$${Number(value || 0).toLocaleString('en-US', {
       maximumFractionDigits: 0
     })}`
-  }
-
-  const formatNumber = (value) => {
-    return Number(value || 0).toLocaleString('en-US')
-  }
 
   const backendOnline =
     state.status?.status === 'ok' ||
     state.status?.status === 'healthy' ||
-    state.status?.healthy === true
+    state.status?.message
 
   return (
     <div className="page">
 
-      {/* HEADER */}
+      {/* ================= HEADER ================= */}
       <div className="page-heading">
         <div>
-          <p className="eyebrow">METRICMIND ANALYTICS</p>
+          <p className="eyebrow">OVERVIEW</p>
 
           <h1>
-            Welcome back,{' '}
-            {user?.full_name || user?.username || 'User'}.
+            Good morning,{' '}
+            {user?.full_name || user?.username || 'there'}.
           </h1>
 
           <p className="muted">
-            Monitor your business performance and discover insights
-            from your data.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button
-            className="secondary-button"
-            onClick={() => fetchDashboardData(true)}
-            disabled={refreshing}
-            type="button"
-          >
-            <RefreshCw
-              size={17}
-              className={refreshing ? 'spin' : ''}
-            />
-
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
-
-          <a className="primary-button" href="/query">
-            <Sparkles size={17} />
-            Ask MetricMind
-          </a>
-        </div>
-      </div>
-
-      {/* ERROR */}
-      <ErrorMessage message={state.error} />
-
-      {/* SYSTEM STATUS */}
-      <div
-        className="welcome-band"
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '20px',
-          marginBottom: '24px'
-        }}
-      >
-        <div>
-          <span className="kicker">SYSTEM STATUS</span>
-
-          <h2 style={{ marginBottom: '6px' }}>
-            Your analytics workspace is ready.
-          </h2>
-
-          <p className="muted">
-            MetricMind is connected to your business data and ready
-            to answer analytical questions.
+            A live pulse check of your MetricMind workspace.
           </p>
         </div>
 
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            whiteSpace: 'nowrap',
-            fontWeight: 600
+            gap: '10px',
+            alignItems: 'center'
           }}
         >
-          <span
-            style={{
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
-              background: backendOnline ? '#22c55e' : '#ef4444',
-              display: 'inline-block'
-            }}
-          />
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => fetchDashboardData(true)}
+            disabled={state.refreshing}
+          >
+            <RefreshCw
+              size={17}
+              className={
+                state.refreshing ? 'spin' : ''
+              }
+            />
 
-          {backendOnline ? 'Backend Online' : 'Check Backend'}
+            {state.refreshing
+              ? 'Refreshing...'
+              : 'Refresh'}
+          </button>
+
+          <a
+            className="primary-button"
+            href="/query"
+          >
+            <Sparkles size={17} />
+            Ask a question
+          </a>
         </div>
       </div>
 
-      {/* KPI CARDS */}
+      {/* ================= ERROR ================= */}
+      <ErrorMessage message={state.error} />
+
+      {/* ================= BACKEND STATUS ================= */}
+      <div
+        className="card"
+        style={{
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}
+        >
+          <Database size={20} />
+
+          <div>
+            <strong>MetricMind API</strong>
+
+            <div className="muted">
+              {backendOnline
+                ? 'Backend connected successfully'
+                : 'Backend status unavailable'}
+            </div>
+          </div>
+        </div>
+
+        <span>
+          {backendOnline
+            ? '● Online'
+            : '● Offline'}
+        </span>
+      </div>
+
+      {/* ================= KPI CARDS ================= */}
       <div className="metrics-grid">
 
         <MetricCard
           icon={Database}
           label="Total Revenue"
-          value={formatCurrency(kpis.total_sales)}
-          detail="Revenue generated from all transactions"
+          value={formatCurrency(totalRevenue)}
+          detail="Revenue from all transactions"
           tone="blue"
         />
 
         <MetricCard
-          icon={Activity}
+          icon={TrendingUp}
           label="Total Profit"
-          value={formatCurrency(kpis.total_profit)}
-          detail="Net profit generated from sales"
+          value={formatCurrency(totalProfit)}
+          detail="Net profit after costs"
           tone="green"
         />
 
         <MetricCard
           icon={ShoppingCart}
           label="Total Orders"
-          value={formatNumber(kpis.total_orders)}
+          value={totalOrders.toLocaleString()}
           detail="Number of unique orders"
           tone="amber"
         />
@@ -241,273 +328,334 @@ export default function Dashboard() {
         <MetricCard
           icon={Users}
           label="Total Customers"
-          value={formatNumber(kpis.total_customers)}
-          detail="Unique customers in your dataset"
+          value={totalCustomers.toLocaleString()}
+          detail="Unique customer count"
           tone="purple"
         />
 
       </div>
 
-      {/* AI COPILOT */}
+      {/* ================= AI COPILOT ================= */}
       <div className="welcome-band">
 
         <div>
           <span className="kicker">
-            <Sparkles size={14} style={{ marginRight: '5px' }} />
-            AI ANALYTICS COPILOT
+            YOUR ANALYTICS COPILOT
           </span>
 
           <h2>
-            Ask questions. Get insights. Make better decisions.
+            Turn a business question into a
+            confident next move.
           </h2>
 
           <p>
-            Use natural language to explore revenue, profit,
-            products, customers, regions and other business metrics.
+            MetricMind connects natural language,
+            governed SQL, and decision-ready visuals.
           </p>
         </div>
 
-        <a
-          href="/query"
-          className="primary-button"
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          <MessageSquare size={17} />
-          Ask a Question
-          <ArrowUpRight size={17} />
-        </a>
+        <ArrowUpRight size={26} />
 
       </div>
 
-      {/* CHARTS */}
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">PERFORMANCE</p>
-          <h2>Business Performance</h2>
-          <p className="muted">
-            Explore how your sales are distributed across regions
-            and products.
-          </p>
-        </div>
-      </div>
-
-      <div className="section-grid">
-
-        <ChartCard
-          title="Sales by Region"
-          data={state.salesByRegion || []}
-          type="bar"
-          dataKey="region"
-          valueKey="sales"
-        />
-
-        <ChartCard
-          title="Top 10 Products"
-          data={state.topProducts || []}
-          type="bar"
-          dataKey="product"
-          valueKey="sales"
-        />
-
-      </div>
-
-      {/* ANALYTICS SUMMARY */}
-      <div className="section-grid" style={{ marginTop: '24px' }}>
-
-        <div className="card">
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              marginBottom: '15px'
-            }}
-          >
-            <BarChart3 size={22} />
-            <div>
-              <h3 style={{ margin: 0 }}>Analytics</h3>
-              <p className="muted" style={{ margin: 0 }}>
-                Available data
-              </p>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gap: '12px' }}>
-
-            <div>
-              <strong>Metrics</strong>
-              <p className="muted">
-                {Array.isArray(state.metrics)
-                  ? state.metrics.length
-                  : state.metrics
-                    ? Object.keys(state.metrics).length
-                    : 0}{' '}
-                available metrics
-              </p>
-            </div>
-
-            <div>
-              <strong>Dimensions</strong>
-              <p className="muted">
-                {Array.isArray(state.dimensions)
-                  ? state.dimensions.length
-                  : state.dimensions
-                    ? Object.keys(state.dimensions).length
-                    : 0}{' '}
-                available dimensions
-              </p>
-            </div>
-
-          </div>
-        </div>
-
-        <div className="card">
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              marginBottom: '15px'
-            }}
-          >
-            <Server size={22} />
-
-            <div>
-              <h3 style={{ margin: 0 }}>
-                MetricMind Engine
-              </h3>
-
-              <p className="muted" style={{ margin: 0 }}>
-                Data intelligence status
-              </p>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              marginBottom: '12px'
-            }}
-          >
-            <span
-              style={{
-                width: '9px',
-                height: '9px',
-                borderRadius: '50%',
-                background: backendOnline
-                  ? '#22c55e'
-                  : '#ef4444'
-              }}
-            />
-
-            <strong>
-              {backendOnline
-                ? 'All systems operational'
-                : 'Backend connection needs attention'}
-            </strong>
-          </div>
-
-          <p className="muted">
-            Ask MetricMind questions about your business data
-            using natural language.
-          </p>
-
-          <a
-            href="/query"
-            className="primary-button"
-            style={{
-              display: 'inline-flex',
-              marginTop: '8px'
-            }}
-          >
-            <Sparkles size={16} />
-            Start Analysis
-          </a>
-
-        </div>
-
-      </div>
-
-      {/* QUICK ACTIONS */}
+      {/* ================= REVENUE / PROFIT TRENDS ================= */}
       <section className="section">
 
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">QUICK ACTIONS</p>
-            <h2>What would you like to do?</h2>
-          </div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '15px'
+          }}
+        >
+          <TrendingUp size={22} />
+
+          <h3 style={{ margin: 0 }}>
+            Performance Trends
+          </h3>
         </div>
 
+        {state.revenueTrend.length > 0 ||
+        state.profitTrend.length > 0 ? (
+
+          <div className="section-grid">
+
+            {state.revenueTrend.length > 0 && (
+              <ChartCard
+                title="Revenue Trend"
+                data={state.revenueTrend}
+                type="line"
+                dataKey="period"
+                valueKey="revenue"
+              />
+            )}
+
+            {state.profitTrend.length > 0 && (
+              <ChartCard
+                title="Profit Trend"
+                data={state.profitTrend}
+                type="line"
+                dataKey="period"
+                valueKey="profit"
+              />
+            )}
+
+          </div>
+
+        ) : (
+
+          <div className="card">
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}
+            >
+              <BarChart3 size={24} />
+
+              <div>
+                <strong>
+                  Trend data is not available yet
+                </strong>
+
+                <p className="muted">
+                  Your backend currently provides
+                  KPI, region, and product data.
+                  Revenue/profit trend charts will
+                  appear automatically when the API
+                  returns trend data.
+                </p>
+              </div>
+            </div>
+          </div>
+
+        )}
+
+      </section>
+
+      {/* ================= REGION + PRODUCTS ================= */}
+      <section className="section">
+
         <div
-          className="metrics-grid"
-          style={{ marginTop: '16px' }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '15px'
+          }}
         >
+          <BarChart3 size={22} />
 
-          <a
-            href="/query"
-            className="card"
-            style={{
-              textDecoration: 'none',
-              color: 'inherit'
-            }}
-          >
-            <Sparkles size={24} />
-            <h3>Ask MetricMind</h3>
-            <p className="muted">
-              Ask questions about revenue, profit, products and
-              customers.
-            </p>
-          </a>
+          <h3 style={{ margin: 0 }}>
+            Sales Performance
+          </h3>
+        </div>
 
-          <a
-            href="/analytics"
-            className="card"
-            style={{
-              textDecoration: 'none',
-              color: 'inherit'
-            }}
-          >
-            <BarChart3 size={24} />
-            <h3>Explore Analytics</h3>
-            <p className="muted">
-              Explore detailed business performance and trends.
-            </p>
-          </a>
+        <div className="section-grid">
 
-          <a
-            href="/data"
-            className="card"
-            style={{
-              textDecoration: 'none',
-              color: 'inherit'
-            }}
-          >
-            <Database size={24} />
-            <h3>Manage Data</h3>
-            <p className="muted">
-              View and manage the datasets connected to MetricMind.
-            </p>
-          </a>
+          <ChartCard
+            title="Sales by Region"
+            data={state.salesByRegion || []}
+            type="bar"
+            dataKey="region"
+            valueKey="sales"
+          />
+
+          <ChartCard
+            title="Top 10 Products"
+            data={state.topProducts || []}
+            type="bar"
+            dataKey="product"
+            valueKey="sales"
+          />
 
         </div>
 
       </section>
 
-      {/* FOOTER */}
-      <div
-        style={{
-          textAlign: 'center',
-          padding: '30px 0 10px',
-          opacity: 0.7
-        }}
-      >
-        <p className="muted">
-          MetricMind • AI-powered business intelligence
-        </p>
-      </div>
+      {/* ================= PIE CHARTS ================= */}
+      <section className="section">
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '15px'
+          }}
+        >
+          <PieChart size={22} />
+
+          <h3 style={{ margin: 0 }}>
+            Revenue Distribution
+          </h3>
+        </div>
+
+        <div className="section-grid">
+
+          {/* Revenue by Region */}
+          <ChartCard
+            title="Revenue by Region"
+            data={
+              state.revenueByRegion.length > 0
+                ? state.revenueByRegion
+                : state.salesByRegion || []
+            }
+            type="pie"
+            dataKey="region"
+            valueKey={
+              state.revenueByRegion.length > 0
+                ? 'revenue'
+                : 'sales'
+            }
+          />
+
+          {/* Sales by Category */}
+          {state.salesByCategory.length > 0 ? (
+
+            <ChartCard
+              title="Sales by Category"
+              data={state.salesByCategory}
+              type="pie"
+              dataKey="category"
+              valueKey="sales"
+            />
+
+          ) : (
+
+            <div className="card">
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}
+              >
+
+                <PieChart size={24} />
+
+                <div>
+
+                  <strong>
+                    Category data is not available
+                  </strong>
+
+                  <p className="muted">
+                    The current API does not return
+                    category-level sales data yet.
+                    Once it is added, this pie chart
+                    will display automatically.
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          )}
+
+        </div>
+
+      </section>
+
+      {/* ================= ANALYTICS SUMMARY ================= */}
+      <section className="section">
+
+        <h3>Analytics Summary</h3>
+
+        <div className="section-grid">
+
+          <div className="card">
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}
+            >
+
+              <Activity size={25} />
+
+              <div>
+
+                <strong>
+                  Revenue
+                </strong>
+
+                <p className="muted">
+                  {formatCurrency(totalRevenue)}
+                  generated across all transactions.
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="card">
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}
+            >
+
+              <TrendingUp size={25} />
+
+              <div>
+
+                <strong>
+                  Profit
+                </strong>
+
+                <p className="muted">
+                  {formatCurrency(totalProfit)}
+                  total profit recorded.
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      {/* ================= NEXT STEPS ================= */}
+      <section className="section">
+
+        <h3>Next Steps</h3>
+
+        <ul>
+
+          <li>
+            <strong>Ask MetricMind:</strong>{' '}
+            Use natural language to query your data.
+          </li>
+
+          <li>
+            <strong>Explore Analytics:</strong>{' '}
+            Dive into regional and product performance.
+          </li>
+
+          <li>
+            <strong>Manage Data:</strong>{' '}
+            Upload datasets and manage records.
+          </li>
+
+        </ul>
+
+      </section>
 
     </div>
   )
