@@ -116,6 +116,20 @@ export const apiService = {
     })
   },
 
+  uploadDataset: function (file, onUploadProgress) {
+    var formData = new FormData()
+    formData.append('file', file)
+    return api.post('/datasets/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: onUploadProgress,
+    })
+  },
+
+  getDatasets: function () { return api.get('/datasets') },
+  getActiveDataset: function () { return api.get('/datasets/active') },
+  activateDataset: function (datasetId) { return api.post('/datasets/' + datasetId + '/activate') },
+  deleteDataset: function (datasetId) { return api.delete('/datasets/' + datasetId) },
+
   // SQL
   generateSql: function (payload) {
     return api.post('/sql/generate', payload)

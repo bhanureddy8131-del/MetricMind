@@ -97,6 +97,7 @@ class SQLGenerator:
         order_by: str = None,
         limit: int = 100,
         semantic_layer=None,
+        table_name: str = "sales",
     ) -> str:
         """
         Build a SQL query from metrics and dimensions.
@@ -140,7 +141,9 @@ class SQLGenerator:
             raise ValueError("Must specify at least one metric or dimension")
 
         select_clause = ", ".join(select_parts)
-        query = f"SELECT {select_clause} FROM sales"
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table_name):
+            raise ValueError("Invalid dataset table name")
+        query = f"SELECT {select_clause} FROM {table_name}"
 
         # Add WHERE clause for filters
         where_parts = []

@@ -12,6 +12,7 @@ from app.agent.agent import get_agent
 from app.semantic_layer.loader import semantic_layer
 from app.sql.generator import SQLGenerator, SQLValidator
 from app.sql.validator import QueryValidator
+from app.models import Dataset
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,12 @@ class QueryService:
                 filters=filters,
                 limit=100,
                 semantic_layer=semantic_layer,
+                table_name=(
+                    db.query(Dataset.table_name)
+                    .filter(Dataset.is_active.is_(True))
+                    .scalar()
+                    or "sales"
+                ),
             )
 
             logger.info(f"Generated SQL: {sql}")

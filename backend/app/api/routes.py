@@ -695,3 +695,7 @@ def logout():
 router.include_router(
     auth_router
 )
+
+from app.api.datasets import router as dataset_router
+
+router.include_router(dataset_router)

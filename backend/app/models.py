@@ -15,6 +15,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
 )
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.ext.declarative import declarative_base
@@ -222,3 +223,21 @@ class User(Base):
             f"username={self.username}, "
             f"email={self.email})>"
         )
+
+
+class Dataset(Base):
+    """Metadata for user-uploaded datasets stored in SQLite tables."""
+
+    __tablename__ = "datasets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    file_type = Column(String(10), nullable=False)
+    row_count = Column(Integer, nullable=False)
+    column_count = Column(Integer, nullable=False)
+    columns = Column(Text, nullable=False)
+    table_name = Column(String(128), unique=True, nullable=False)
+    upload_status = Column(String(32), nullable=False, default="completed")
+    uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_active = Column(Boolean, default=False, nullable=False)
