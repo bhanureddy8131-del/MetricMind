@@ -1,25 +1,181 @@
 import { useEffect, useState } from 'react'
+
 import {
   Activity,
   ArrowUpRight,
-  Database,
-  Layers3,
-  MessageSquare,
-  Sparkles,
-  ShoppingCart,
-  Users,
-  RefreshCw,
-  TrendingUp,
   BarChart3,
-  PieChart
+  Database,
+  PieChart,
+  RefreshCw,
+  ShoppingCart,
+  Sparkles,
+  TrendingUp,
+  Users,
 } from 'lucide-react'
 
 import { apiService } from '../services/api'
 import { useAuth } from '../context/useAuth'
+
 import MetricCard from '../components/MetricCard'
 import ChartCard from '../components/ChartCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+
+// ======================================================
+// HELPERS
+// ======================================================
+
+function getResponseData(response) {
+  return response?.data || null
+}
+
+function getRows(response) {
+  const data = getResponseData(response)
+
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data
+  }
+
+  return []
+}
+
+function getFirstRow(response) {
+  const rows = getRows(response)
+
+  if (rows.length > 0) {
+    return rows[0]
+  }
+
+  return null
+}
+
+function findNumber(value) {
+  if (typeof value === 'number') {
+    return value
+  }
+
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[$,]/g, '')
+    const number = Number(cleaned)
+
+    if (!Number.isNaN(number)) {
+      return number
+    }
+
+    const match = value.match(/-?[\d,]+(?:\.\d+)?/)
+
+    if (match) {
+      return Number(match[0].replace(/,/g, ''))
+    }
+  }
+
+  return 0
+}
+
+function getMetricValue(response, keys = []) {
+  const row = getFirstRow(response)
+
+  if (row) {
+    for (const key of keys) {
+      if (row[key] !== undefined && row[key] !== null) {
+        return findNumber(row[key])
+      }
+    }
+  }
+
+  const answer = getResponseData(response)?.answer
+
+  if (answer) {
+    return findNumber(answer)
+  }
+
+  return 0
+}
+
+function formatCurrency(value) {
+  return `$${Number(value || 0).toLocaleString('en-US', {
+    maximumFractionDigits: 0,
+  })}`
+}
+
+function normalizeRegionData(response) {
+  const rows = getRows(response)
+
+  return rows
+    .map((item) => ({
+      region:
+        item.region ??
+        item.Region ??
+        item.name ??
+        item.Name ??
+        'Unknown',
+
+      sales: findNumber(
+        item.sales ??
+        item.revenue ??
+        item.total_sales ??
+        item.value ??
+        item.profit
+      ),
+    }))
+    .filter((item) => item.region !== 'Unknown' || item.sales !== 0)
+}
+
+function normalizeCategoryData(response) {
+  const rows = getRows(response)
+
+  return rows
+    .map((item) => ({
+      category:
+        item.category ??
+        item.Category ??
+        item.name ??
+        item.Name ??
+        'Unknown',
+
+      sales: findNumber(
+        item.sales ??
+        item.revenue ??
+        item.total_sales ??
+        item.value ??
+        item.profit
+      ),
+    }))
+    .filter((item) => item.category !== 'Unknown' || item.sales !== 0)
+}
+
+function normalizeProductData(response) {
+  const rows = getRows(response)
+
+  return rows
+    .slice(0, 10)
+    .map((item) => ({
+      product:
+        item.product ??
+        item.product_name ??
+        item.Product ??
+        item['Product Name'] ??
+        item.name ??
+        'Unknown',
+
+      sales: findNumber(
+        item.sales ??
+        item.revenue ??
+        item.total_sales ??
+        item.value ??
+        item.profit
+      ),
+    }))
+    .filter((item) => item.product !== 'Unknown' || item.sales !== 0)
+}
+
+// ======================================================
+// DASHBOARD
+// ======================================================
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -28,198 +184,229 @@ export default function Dashboard() {
     loading: true,
     refreshing: false,
     error: '',
-    kpis: null,
-    status: null,
-    metrics: null,
-    dimensions: null,
-    salesByRegion: [],
-    topProducts: [],
+
+    backendOnline: false,
+
+    totalRevenue: 0,
+    totalProfit: 0,
+    totalOrders: 0,
+    totalCustomers: 0,
+
     revenueByRegion: [],
     salesByCategory: [],
-    revenueTrend: [],
-    profitTrend: []
+    topProducts: [],
   })
 
-  const fetchDashboardData = async (isRefresh = false) => {
-    try {
-      setState((current) => ({
-        ...current,
-        ...(isRefresh
-          ? { refreshing: true }
-          : { loading: true }),
-        error: ''
-      }))
+  // ====================================================
+  // LOAD DASHBOARD
+  // ====================================================
 
-      const [
-        status,
-        kpis,
-        metrics,
-        dimensions,
-        regionData,
-        topProducts
-      ] = await Promise.all([
-        apiService.status(),
-        apiService.getDashboardKPIs(),
-        apiService.metrics(),
-        apiService.dimensions(),
-        apiService.getSalesByRegion(),
-        apiService.getTopProducts(10)
+  const fetchDashboardData = async (isRefresh = false) => {
+    setState((current) => ({
+      ...current,
+
+      ...(isRefresh
+        ? { refreshing: true }
+        : { loading: true }),
+
+      error: '',
+    }))
+
+    try {
+      // ------------------------------------------------
+      // 1. HEALTH
+      // ------------------------------------------------
+
+      const healthResult = await apiService.health()
+
+      // ------------------------------------------------
+      // 2. KPI QUERIES
+      // ------------------------------------------------
+
+      const results = await Promise.allSettled([
+        apiService.query('What is our total revenue?'),
+
+        apiService.query('What is our total profit?'),
+
+        apiService.query('How many orders do we have?'),
+
+        apiService.query('How many customers do we have?'),
+
+        apiService.query('What is total revenue by region?'),
+
+        apiService.query('What is total revenue by category?'),
+
+        apiService.query('Show top 10 products by profit'),
       ])
 
-      const region = regionData?.data || []
-      const products = topProducts?.data || []
+      const [
+        revenueResult,
+        profitResult,
+        ordersResult,
+        customersResult,
+        regionResult,
+        categoryResult,
+        productsResult,
+      ] = results
 
-      /*
-       * Convert backend region data into formats usable by
-       * bar and pie charts.
-       */
-      const revenueByRegion = region.map((item) => ({
-        region:
-          item.region ||
-          item.Region ||
-          item.name ||
-          'Unknown',
-        revenue:
-          Number(
-            item.revenue ??
-            item.sales ??
-            item.total_sales ??
-            item.value ??
-            0
-          )
-      }))
+      // ------------------------------------------------
+      // 3. READ KPI RESULTS
+      // ------------------------------------------------
 
-      /*
-       * If the backend returns category information through
-       * metrics/dimensions, use it. Otherwise keep an empty
-       * array instead of creating fake data.
-       */
-      let salesByCategory = []
+      const totalRevenue =
+        revenueResult.status === 'fulfilled'
+          ? getMetricValue(revenueResult.value, [
+              'revenue',
+              'total_revenue',
+              'sales',
+              'total_sales',
+            ])
+          : 0
 
-      if (Array.isArray(metrics?.data)) {
-        salesByCategory = metrics.data
-          .filter(
-            (item) =>
-              item.category ||
-              item.Category ||
-              item.name
-          )
-          .map((item) => ({
-            category:
-              item.category ||
-              item.Category ||
-              item.name ||
-              'Unknown',
-            sales: Number(
-              item.sales ??
-              item.revenue ??
-              item.total_sales ??
-              item.value ??
-              0
-            )
-          }))
+      const totalProfit =
+        profitResult.status === 'fulfilled'
+          ? getMetricValue(profitResult.value, [
+              'profit',
+              'total_profit',
+            ])
+          : 0
+
+      const totalOrders =
+        ordersResult.status === 'fulfilled'
+          ? getMetricValue(ordersResult.value, [
+              'orders',
+              'total_orders',
+              'order_count',
+            ])
+          : 0
+
+      const totalCustomers =
+        customersResult.status === 'fulfilled'
+          ? getMetricValue(customersResult.value, [
+              'customers',
+              'total_customers',
+              'customer_count',
+            ])
+          : 0
+
+      // ------------------------------------------------
+      // 4. CHART DATA
+      // ------------------------------------------------
+
+      const revenueByRegion =
+        regionResult.status === 'fulfilled'
+          ? normalizeRegionData(regionResult.value)
+          : []
+
+      const salesByCategory =
+        categoryResult.status === 'fulfilled'
+          ? normalizeCategoryData(categoryResult.value)
+          : []
+
+      const topProducts =
+        productsResult.status === 'fulfilled'
+          ? normalizeProductData(productsResult.value)
+          : []
+
+      // ------------------------------------------------
+      // 5. CHECK PARTIAL FAILURES
+      // ------------------------------------------------
+
+      const failedQueries = results.filter(
+        (result) => result.status === 'rejected'
+      )
+
+      let errorMessage = ''
+
+      if (failedQueries.length === results.length) {
+        errorMessage =
+          'MetricMind backend is online, but the analytics queries could not be completed.'
+      } else if (failedQueries.length > 0) {
+        errorMessage =
+          'Some dashboard sections could not be loaded. Available data is still displayed.'
       }
 
-      /*
-       * Do not create fake trend data.
-       * These arrays will be populated if your backend
-       * provides trend information.
-       */
-      const revenueTrend =
-        kpis?.data?.revenue_trend ||
-        kpis?.data?.sales_trend ||
-        []
-
-      const profitTrend =
-        kpis?.data?.profit_trend ||
-        []
+      // ------------------------------------------------
+      // 6. UPDATE STATE
+      // ------------------------------------------------
 
       setState({
         loading: false,
         refreshing: false,
-        error: '',
-        status: status?.data || null,
-        kpis: kpis?.data || null,
-        metrics: metrics?.data || null,
-        dimensions: dimensions?.data || null,
-        salesByRegion: region,
-        topProducts: products,
+        error: errorMessage,
+
+        backendOnline: Boolean(healthResult?.data),
+
+        totalRevenue,
+        totalProfit,
+        totalOrders,
+        totalCustomers,
+
         revenueByRegion,
         salesByCategory,
-        revenueTrend,
-        profitTrend
+        topProducts,
       })
     } catch (error) {
       console.error('Dashboard error:', error)
 
       setState((current) => ({
         ...current,
+
         loading: false,
         refreshing: false,
+
+        backendOnline: false,
+
         error:
-          error?.response?.data?.detail ||
           error?.message ||
-          'Unable to load dashboard data.'
+          'Unable to connect to MetricMind backend.',
       }))
     }
   }
+
+  // ====================================================
+  // INITIAL LOAD
+  // ====================================================
 
   useEffect(() => {
     fetchDashboardData()
   }, [])
 
+  // ====================================================
+  // LOADING
+  // ====================================================
+
   if (state.loading) {
     return <LoadingSpinner label="Loading dashboard" />
   }
 
-  const kpis = state.kpis || {
-    total_sales: 0,
-    total_profit: 0,
-    total_orders: 0,
-    total_customers: 0
-  }
-
-  const totalRevenue =
-    Number(
-      kpis.total_revenue ??
-      kpis.total_sales ??
-      0
-    )
-
-  const totalProfit =
-    Number(kpis.total_profit ?? 0)
-
-  const totalOrders =
-    Number(kpis.total_orders ?? 0)
-
-  const totalCustomers =
-    Number(kpis.total_customers ?? 0)
-
-  const formatCurrency = (value) =>
-    `$${Number(value || 0).toLocaleString('en-US', {
-      maximumFractionDigits: 0
-    })}`
-
-  const backendOnline =
-    state.status?.status === 'ok' ||
-    state.status?.status === 'healthy' ||
-    state.status?.message
+  // ====================================================
+  // RENDER
+  // ====================================================
 
   return (
     <div className="page">
 
-      {/* ================= HEADER ================= */}
+      {/* ============================================== */}
+      {/* HEADER */}
+      {/* ============================================== */}
+
       <div className="page-heading">
+
         <div>
           <p className="eyebrow">OVERVIEW</p>
 
           <h1>
             Good morning,{' '}
-            {user?.full_name || user?.username || 'there'}.
+            {user?.full_name ||
+              user?.username ||
+              'there'}
+            .
           </h1>
 
           <p className="muted">
-            A live pulse check of your MetricMind workspace.
+            A live pulse check of your MetricMind
+            workspace.
           </p>
         </div>
 
@@ -227,9 +414,10 @@ export default function Dashboard() {
           style={{
             display: 'flex',
             gap: '10px',
-            alignItems: 'center'
+            alignItems: 'center',
           }}
         >
+
           <button
             type="button"
             className="secondary-button"
@@ -253,58 +441,76 @@ export default function Dashboard() {
             href="/query"
           >
             <Sparkles size={17} />
+
             Ask a question
           </a>
+
         </div>
+
       </div>
 
-      {/* ================= ERROR ================= */}
+      {/* ============================================== */}
+      {/* ERROR */}
+      {/* ============================================== */}
+
       <ErrorMessage message={state.error} />
 
-      {/* ================= BACKEND STATUS ================= */}
+      {/* ============================================== */}
+      {/* BACKEND STATUS */}
+      {/* ============================================== */}
+
       <div
         className="card"
         style={{
           marginBottom: '20px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
         }}
       >
+
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '10px'
+            gap: '10px',
           }}
         >
+
           <Database size={20} />
 
           <div>
             <strong>MetricMind API</strong>
 
             <div className="muted">
-              {backendOnline
+              {state.backendOnline
                 ? 'Backend connected successfully'
-                : 'Backend status unavailable'}
+                : 'Backend unavailable'}
             </div>
           </div>
+
         </div>
 
         <span>
-          {backendOnline
+          {state.backendOnline
             ? '● Online'
             : '● Offline'}
         </span>
+
       </div>
 
-      {/* ================= KPI CARDS ================= */}
+      {/* ============================================== */}
+      {/* KPI CARDS */}
+      {/* ============================================== */}
+
       <div className="metrics-grid">
 
         <MetricCard
           icon={Database}
           label="Total Revenue"
-          value={formatCurrency(totalRevenue)}
+          value={formatCurrency(
+            state.totalRevenue
+          )}
           detail="Revenue from all transactions"
           tone="blue"
         />
@@ -312,7 +518,9 @@ export default function Dashboard() {
         <MetricCard
           icon={TrendingUp}
           label="Total Profit"
-          value={formatCurrency(totalProfit)}
+          value={formatCurrency(
+            state.totalProfit
+          )}
           detail="Net profit after costs"
           tone="green"
         />
@@ -320,7 +528,9 @@ export default function Dashboard() {
         <MetricCard
           icon={ShoppingCart}
           label="Total Orders"
-          value={totalOrders.toLocaleString()}
+          value={Number(
+            state.totalOrders
+          ).toLocaleString()}
           detail="Number of unique orders"
           tone="amber"
         />
@@ -328,17 +538,23 @@ export default function Dashboard() {
         <MetricCard
           icon={Users}
           label="Total Customers"
-          value={totalCustomers.toLocaleString()}
+          value={Number(
+            state.totalCustomers
+          ).toLocaleString()}
           detail="Unique customer count"
           tone="purple"
         />
 
       </div>
 
-      {/* ================= AI COPILOT ================= */}
+      {/* ============================================== */}
+      {/* AI COPILOT */}
+      {/* ============================================== */}
+
       <div className="welcome-band">
 
         <div>
+
           <span className="kicker">
             YOUR ANALYTICS COPILOT
           </span>
@@ -352,13 +568,17 @@ export default function Dashboard() {
             MetricMind connects natural language,
             governed SQL, and decision-ready visuals.
           </p>
+
         </div>
 
         <ArrowUpRight size={26} />
 
       </div>
 
-      {/* ================= REVENUE / PROFIT TRENDS ================= */}
+      {/* ============================================== */}
+      {/* SALES PERFORMANCE */}
+      {/* ============================================== */}
+
       <section className="section">
 
         <div
@@ -366,98 +586,23 @@ export default function Dashboard() {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            marginBottom: '15px'
+            marginBottom: '15px',
           }}
         >
-          <TrendingUp size={22} />
 
-          <h3 style={{ margin: 0 }}>
-            Performance Trends
-          </h3>
-        </div>
-
-        {state.revenueTrend.length > 0 ||
-        state.profitTrend.length > 0 ? (
-
-          <div className="section-grid">
-
-            {state.revenueTrend.length > 0 && (
-              <ChartCard
-                title="Revenue Trend"
-                data={state.revenueTrend}
-                type="line"
-                dataKey="period"
-                valueKey="revenue"
-              />
-            )}
-
-            {state.profitTrend.length > 0 && (
-              <ChartCard
-                title="Profit Trend"
-                data={state.profitTrend}
-                type="line"
-                dataKey="period"
-                valueKey="profit"
-              />
-            )}
-
-          </div>
-
-        ) : (
-
-          <div className="card">
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}
-            >
-              <BarChart3 size={24} />
-
-              <div>
-                <strong>
-                  Trend data is not available yet
-                </strong>
-
-                <p className="muted">
-                  Your backend currently provides
-                  KPI, region, and product data.
-                  Revenue/profit trend charts will
-                  appear automatically when the API
-                  returns trend data.
-                </p>
-              </div>
-            </div>
-          </div>
-
-        )}
-
-      </section>
-
-      {/* ================= REGION + PRODUCTS ================= */}
-      <section className="section">
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '15px'
-          }}
-        >
           <BarChart3 size={22} />
 
           <h3 style={{ margin: 0 }}>
             Sales Performance
           </h3>
+
         </div>
 
         <div className="section-grid">
 
           <ChartCard
-            title="Sales by Region"
-            data={state.salesByRegion || []}
+            title="Revenue by Region"
+            data={state.revenueByRegion}
             type="bar"
             dataKey="region"
             valueKey="sales"
@@ -465,7 +610,7 @@ export default function Dashboard() {
 
           <ChartCard
             title="Top 10 Products"
-            data={state.topProducts || []}
+            data={state.topProducts}
             type="bar"
             dataKey="product"
             valueKey="sales"
@@ -475,7 +620,10 @@ export default function Dashboard() {
 
       </section>
 
-      {/* ================= PIE CHARTS ================= */}
+      {/* ============================================== */}
+      {/* CATEGORY */}
+      {/* ============================================== */}
+
       <section className="section">
 
         <div
@@ -483,36 +631,20 @@ export default function Dashboard() {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            marginBottom: '15px'
+            marginBottom: '15px',
           }}
         >
+
           <PieChart size={22} />
 
           <h3 style={{ margin: 0 }}>
             Revenue Distribution
           </h3>
+
         </div>
 
         <div className="section-grid">
 
-          {/* Revenue by Region */}
-          <ChartCard
-            title="Revenue by Region"
-            data={
-              state.revenueByRegion.length > 0
-                ? state.revenueByRegion
-                : state.salesByRegion || []
-            }
-            type="pie"
-            dataKey="region"
-            valueKey={
-              state.revenueByRegion.length > 0
-                ? 'revenue'
-                : 'sales'
-            }
-          />
-
-          {/* Sales by Category */}
           {state.salesByCategory.length > 0 ? (
 
             <ChartCard
@@ -531,7 +663,7 @@ export default function Dashboard() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px'
+                  gap: '12px',
                 }}
               >
 
@@ -544,10 +676,8 @@ export default function Dashboard() {
                   </strong>
 
                   <p className="muted">
-                    The current API does not return
-                    category-level sales data yet.
-                    Once it is added, this pie chart
-                    will display automatically.
+                    No category-level results were
+                    returned by the current dataset.
                   </p>
 
                 </div>
@@ -562,7 +692,10 @@ export default function Dashboard() {
 
       </section>
 
-      {/* ================= ANALYTICS SUMMARY ================= */}
+      {/* ============================================== */}
+      {/* ANALYTICS SUMMARY */}
+      {/* ============================================== */}
+
       <section className="section">
 
         <h3>Analytics Summary</h3>
@@ -575,7 +708,7 @@ export default function Dashboard() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px'
+                gap: '12px',
               }}
             >
 
@@ -588,7 +721,9 @@ export default function Dashboard() {
                 </strong>
 
                 <p className="muted">
-                  {formatCurrency(totalRevenue)}
+                  {formatCurrency(
+                    state.totalRevenue
+                  )}{' '}
                   generated across all transactions.
                 </p>
 
@@ -604,7 +739,7 @@ export default function Dashboard() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px'
+                gap: '12px',
               }}
             >
 
@@ -617,7 +752,9 @@ export default function Dashboard() {
                 </strong>
 
                 <p className="muted">
-                  {formatCurrency(totalProfit)}
+                  {formatCurrency(
+                    state.totalProfit
+                  )}{' '}
                   total profit recorded.
                 </p>
 
@@ -631,7 +768,10 @@ export default function Dashboard() {
 
       </section>
 
-      {/* ================= NEXT STEPS ================= */}
+      {/* ============================================== */}
+      {/* NEXT STEPS */}
+      {/* ============================================== */}
+
       <section className="section">
 
         <h3>Next Steps</h3>
@@ -645,7 +785,7 @@ export default function Dashboard() {
 
           <li>
             <strong>Explore Analytics:</strong>{' '}
-            Dive into regional and product performance.
+            Analyze regional and product performance.
           </li>
 
           <li>
