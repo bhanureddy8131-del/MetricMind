@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const API_BASE_URL = 'http://127.0.0.1:8001/api'
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,232 +11,229 @@ const api = axios.create({
   },
 })
 
-// ======================================================
-// AUTH TOKEN
-// ======================================================
-
+// Add JWT token
 api.interceptors.request.use(
-  (config) => {
+  function (config) {
     const token = localStorage.getItem('metricmind_token')
 
     if (token) {
       config.headers = config.headers || {}
-      config.headers.Authorization = `Bearer ${token}`
+      config.headers.Authorization = 'Bearer ' + token
     }
 
     return config
   },
-  (error) => Promise.reject(error)
-)
-
-// ======================================================
-// ERROR HANDLING
-// ======================================================
-
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const status = error?.response?.status
-
-    if (status === 401) {
-      localStorage.removeItem('metricmind_token')
-      localStorage.removeItem('metricmind_user')
-
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
-      }
-    }
-
-    let message = 'Unable to reach MetricMind backend.'
-
-    if (error?.response?.data?.detail) {
-      message =
-        typeof error.response.data.detail === 'string'
-          ? error.response.data.detail
-          : 'Request failed.'
-    } else if (error?.message) {
-      message = error.message
-    }
-
-    return Promise.reject(new Error(message))
+  function (error) {
+    return Promise.reject(error)
   }
 )
 
-// ======================================================
-// METRICMIND API
-// ======================================================
+// Handle API errors
+api.interceptors.response.use(
+  function (response) {
+    return response
+  },
+  function (error) {
+    if (error.response) {
+      if (error.response.status === 401) {
+        localStorage.removeItem('metricmind_token')
+
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+      }
+
+      const detail = error.response.data
+        ? error.response.data.detail
+        : null
+
+      const message =
+        typeof detail === 'string'
+          ? detail
+          : 'MetricMind backend returned an error.'
+
+      return Promise.reject(new Error(message))
+    }
+
+    if (error.request) {
+      return Promise.reject(
+        new Error(
+          'Cannot connect to MetricMind backend. Make sure the backend is running on port 8001.'
+        )
+      )
+    }
+
+    return Promise.reject(
+      new Error('Unable to send request to MetricMind backend.')
+    )
+  }
+)
 
 export const apiService = {
+  // ---------------------------------
+  // SYSTEM
+  // ---------------------------------
 
-  // ----------------------------------------------------
-  // HEALTH
-  // ----------------------------------------------------
-
-  health() {
+  health: function () {
     return api.get('/health')
   },
 
-  // ----------------------------------------------------
-  // AUTHENTICATION
-  // ----------------------------------------------------
-
-  login(email, password) {
-    return api.post('/v1/auth/login', {
-      email,
-      password,
-    })
-  },
-
-  register(full_name, username, email, password) {
-    return api.post('/v1/auth/register', {
-      full_name,
-      username,
-      email,
-      password,
-    })
-  },
-
-  logout() {
-    return api.post('/v1/auth/logout')
-  },
-
-  getCurrentUser() {
-    return api.get('/v1/auth/me')
-  },
-
-  // ----------------------------------------------------
-  // SEMANTIC LAYER
-  // ----------------------------------------------------
-
-  metrics() {
+  metrics: function () {
     return api.get('/metrics')
   },
 
-  dimensions() {
+  dimensions: function () {
     return api.get('/dimensions')
   },
 
-  // ----------------------------------------------------
-  // NATURAL LANGUAGE QUERY
-  // ----------------------------------------------------
+  // ---------------------------------
+  // AUTH
+  // ---------------------------------
 
-  query(question) {
+  login: function (email, password) {
+    return api.post('/v1/auth/login', {
+      email: email,
+      password: password,
+    })
+  },
+
+  register: function (full_name, username, email, password) {
+    return api.post('/v1/auth/register', {
+      full_name: full_name,
+      username: username,
+      email: email,
+      password: password,
+    })
+  },
+
+  logout: function () {
+    return api.post('/v1/auth/logout')
+  },
+
+  getCurrentUser: function () {
+    return api.get('/v1/auth/me')
+  },
+
+  refreshToken: function () {
+    return api.post('/v1/auth/refresh')
+  },
+
+  // ---------------------------------
+  // AI QUERY
+  // ---------------------------------
+
+  query: function (question) {
     return api.post('/query', {
-      question,
+      question: question,
     })
   },
 
-  // ----------------------------------------------------
-  // DATASET
-  // ----------------------------------------------------
-
-  uploadDataset(file, onUploadProgress) {
-    const formData = new FormData()
-
-    formData.append('file', file)
-
-    return api.post('/datasets/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      onUploadProgress,
-    })
-  },
-
-  getDatasets() {
-    return api.get('/datasets')
-  },
-
-  getActiveDataset() {
-    return api.get('/datasets/active')
-  },
-
-  activateDataset(datasetId) {
-    return api.post(`/datasets/${datasetId}/activate`)
-  },
-
-  deleteDataset(datasetId) {
-    return api.delete(`/datasets/${datasetId}`)
-  },
-
-  getDataset(datasetId) {
-    return api.get(`/datasets/${datasetId}`)
-  },
-
-  // ----------------------------------------------------
-  // DATA
-  // ----------------------------------------------------
-
-  getSalesData(page = 1, pageSize = 25, filters = {}) {
-    return api.get('/v1/data', {
-      params: {
-        page,
-        page_size: pageSize,
-        ...filters,
-      },
-    })
-  },
-
-  createSalesRecord(record) {
-    return api.post('/v1/data', record)
-  },
-
-  updateSalesRecord(rowId, record) {
-    return api.put(`/v1/data/${rowId}`, record)
-  },
-
-  deleteSalesRecord(rowId) {
-    return api.delete(`/v1/data/${rowId}`)
-  },
-
-  // ----------------------------------------------------
-  // SQL
-  // ----------------------------------------------------
-
-  generateSql(payload) {
+  generateSql: function (payload) {
     return api.post('/sql/generate', payload)
   },
 
-  validateSql(sql) {
+  validateSql: function (sql) {
     return api.post('/sql/validate', {
-      sql,
+      sql: sql,
     })
   },
 
-  // ----------------------------------------------------
-  // AGENT
-  // ----------------------------------------------------
-
-  agentIntent(question) {
+  agentIntent: function (question) {
     return api.post('/agent/intent', {
-      question,
+      question: question,
     })
   },
 
-  agentTools() {
+  agentTools: function () {
     return api.get('/agent/tools')
   },
 
-  // ----------------------------------------------------
-  // ANALYSIS
-  // ----------------------------------------------------
-
-  analyze(data, metrics, dimensions) {
+  analyze: function (data, metrics, dimensions) {
     return api.post('/analysis', {
-      data,
-      metrics,
-      dimensions,
+      data: data,
+      metrics: metrics,
+      dimensions: dimensions,
     })
   },
 
-  // ----------------------------------------------------
-  // LOAD DATA
-  // ----------------------------------------------------
+  // ---------------------------------
+  // DATA
+  // ---------------------------------
 
-  loadData(filePath = null, overwrite = false) {
+  getSalesData: function (page, pageSize, filters) {
+    const currentPage = page || 1
+    const currentPageSize = pageSize || 25
+    const currentFilters = filters || {}
+
+    return api.get('/v1/data', {
+      params: {
+        page: currentPage,
+        page_size: currentPageSize,
+        ...currentFilters,
+      },
+    })
+  },
+
+  createSalesRecord: function (record) {
+    return api.post('/v1/data', record)
+  },
+
+  updateSalesRecord: function (rowId, record) {
+    return api.put('/v1/data/' + rowId, record)
+  },
+
+  deleteSalesRecord: function (rowId) {
+    return api.delete('/v1/data/' + rowId)
+  },
+
+  // ---------------------------------
+  // OPTIONAL ANALYTICS ENDPOINTS
+  // ---------------------------------
+
+  getDashboardKPIs: function (filters) {
+    return api.get('/v1/analytics/kpis', {
+      params: filters || {},
+    })
+  },
+
+  getSalesByRegion: function (filters) {
+    return api.get('/v1/analytics/sales-by-region', {
+      params: filters || {},
+    })
+  },
+
+  getSalesByCategory: function (filters) {
+    return api.get('/v1/analytics/sales-by-category', {
+      params: filters || {},
+    })
+  },
+
+  getTopProducts: function (limit, filters) {
+    return api.get('/v1/analytics/top-products', {
+      params: {
+        limit: limit || 10,
+        ...(filters || {}),
+      },
+    })
+  },
+
+  getSalesTrend: function (period, filters) {
+    return api.get('/v1/analytics/sales-trend', {
+      params: {
+        period: period || 'month',
+        ...(filters || {}),
+      },
+    })
+  },
+
+  // ---------------------------------
+  // DATA LOADING
+  // ---------------------------------
+
+  loadData: function (filePath, overwrite) {
     return api.post('/data/load', {
-      file_path: filePath,
-      overwrite,
+      file_path: filePath || null,
+      overwrite: overwrite || false,
     })
   },
 }
