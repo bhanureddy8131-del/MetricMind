@@ -1,80 +1,121 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 
-const ThemeContext = createContext()
+const ThemeContext = createContext(null)
 
-const themes = {
+const THEMES = {
   cobalt: {
     name: 'Bold Cobalt',
-    primary: '#2563EB',
-    primaryDark: '#1D4ED8',
-    primaryLight: '#DBEAFE',
+    primary: '#2563eb',
+    primaryDark: '#1d4ed8',
+    primaryLight: '#dbeafe',
+    background: '#f8fafc',
+    surface: '#ffffff',
+    surfaceAlt: '#f1f5f9',
+    text: '#0f172a',
+    textMuted: '#64748b',
+    border: '#e2e8f0',
   },
 
-  purple: {
-    name: 'Royal Purple',
-    primary: '#7C3AED',
-    primaryDark: '#6D28D9',
-    primaryLight: '#EDE9FE',
-  },
-
-  emerald: {
-    name: 'Emerald',
-    primary: '#059669',
-    primaryDark: '#047857',
-    primaryLight: '#D1FAE5',
-  },
-
-  rose: {
-    name: 'Rose',
-    primary: '#E11D48',
-    primaryDark: '#BE123C',
-    primaryLight: '#FFE4E6',
+  dark: {
+    name: 'Dark Cobalt',
+    primary: '#3b82f6',
+    primaryDark: '#2563eb',
+    primaryLight: '#1e3a8a',
+    background: '#0f172a',
+    surface: '#1e293b',
+    surfaceAlt: '#334155',
+    text: '#f8fafc',
+    textMuted: '#94a3b8',
+    border: '#334155',
   },
 }
 
 export function ThemeProvider({ children }) {
   const [mode, setMode] = useState(() => {
-    return localStorage.getItem('metricmind_mode') || 'light'
+    return localStorage.getItem('metricmind_theme_mode') || 'light'
   })
 
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('metricmind_theme') || 'cobalt'
+  const [themeName, setThemeName] = useState(() => {
+    return localStorage.getItem('metricmind_theme_name') || 'cobalt'
   })
+
+  const isDark = mode === 'dark'
+  const theme = isDark ? THEMES.dark : THEMES[themeName] || THEMES.cobalt
 
   useEffect(() => {
-    localStorage.setItem('metricmind_mode', mode)
-    localStorage.setItem('metricmind_theme', theme)
+    localStorage.setItem('metricmind_theme_mode', mode)
+    localStorage.setItem('metricmind_theme_name', themeName)
 
-    const root = document.documentElement
+    document.documentElement.setAttribute(
+      'data-theme',
+      isDark ? 'dark' : themeName
+    )
 
-    root.setAttribute('data-theme', theme)
-    root.setAttribute('data-mode', mode)
+    document.documentElement.style.setProperty(
+      '--color-primary',
+      theme.primary
+    )
 
-    const selectedTheme = themes[theme]
+    document.documentElement.style.setProperty(
+      '--color-primary-dark',
+      theme.primaryDark
+    )
 
-    root.style.setProperty('--primary', selectedTheme.primary)
-    root.style.setProperty('--primary-dark', selectedTheme.primaryDark)
-    root.style.setProperty('--primary-light', selectedTheme.primaryLight)
-  }, [mode, theme])
+    document.documentElement.style.setProperty(
+      '--color-primary-light',
+      theme.primaryLight
+    )
 
-  const toggleMode = () => {
-    setMode((current) => (current === 'light' ? 'dark' : 'light'))
+    document.documentElement.style.setProperty(
+      '--color-background',
+      theme.background
+    )
+
+    document.documentElement.style.setProperty(
+      '--color-surface',
+      theme.surface
+    )
+
+    document.documentElement.style.setProperty(
+      '--color-surface-alt',
+      theme.surfaceAlt
+    )
+
+    document.documentElement.style.setProperty(
+      '--color-text',
+      theme.text
+    )
+
+    document.documentElement.style.setProperty(
+      '--color-text-muted',
+      theme.textMuted
+    )
+
+    document.documentElement.style.setProperty(
+      '--color-border',
+      theme.border
+    )
+  }, [mode, themeName, isDark, theme])
+
+  const toggleTheme = () => {
+    setMode((current) => (current === 'dark' ? 'light' : 'dark'))
   }
 
-  const changeTheme = (newTheme) => {
-    if (themes[newTheme]) {
-      setTheme(newTheme)
-    }
+  const setCobaltTheme = () => {
+    setThemeName('cobalt')
+    setMode('light')
   }
 
   return (
     <ThemeContext.Provider
       value={{
         mode,
+        themeName,
         theme,
-        themes,
-        toggleMode,
-        changeTheme,
+        isDark,
+        toggleTheme,
+        setThemeName,
+        setCobaltTheme,
       }}
     >
       {children}
@@ -83,5 +124,13 @@ export function ThemeProvider({ children }) {
 }
 
 export function useTheme() {
-  return useContext(ThemeContext)
+  const context = useContext(ThemeContext)
+
+  if (!context) {
+    throw new Error('useTheme must be used inside ThemeProvider')
+  }
+
+  return context
 }
+
+export { ThemeContext }

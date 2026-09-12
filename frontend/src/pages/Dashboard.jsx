@@ -1,216 +1,184 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Activity,
-  ArrowUpRight,
+  ArrowRight,
   BarChart3,
-  Bot,
+  BrainCircuit,
   Database,
   Moon,
+  PieChart,
   RefreshCw,
+  Sparkles,
   Sun,
   Users,
   ShoppingCart,
-  DollarSign,
   TrendingUp,
-  Sparkles,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 import { apiService } from '../services/api'
 import './Dashboard.css'
-
-function formatNumber(value) {
-  const number = Number(value || 0)
-
-  return number.toLocaleString('en-IN', {
-    maximumFractionDigits: 2,
-  })
-}
 
 function formatCurrency(value) {
   const number = Number(value || 0)
 
-  return '$' + number.toLocaleString('en-US', {
-    maximumFractionDigits: 2,
-  })
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(number)
 }
 
-function extractValue(result) {
-  if (!result) {
-    return 0
-  }
-
-  if (typeof result === 'number') {
-    return result
-  }
-
-  if (typeof result === 'string') {
-    const number = Number(result.replace(/[^0-9.-]/g, ''))
-    return Number.isNaN(number) ? 0 : number
-  }
-
-  if (result.value !== undefined) {
-    return extractValue(result.value)
-  }
-
-  if (result.data !== undefined) {
-    return extractValue(result.data)
-  }
-
-  return 0
+function formatNumber(value) {
+  return new Intl.NumberFormat('en-US').format(Number(value || 0))
 }
 
-function findNumericValue(data, names) {
-  if (!data || typeof data !== 'object') {
-    return 0
-  }
-
-  for (const name of names) {
-    if (data[name] !== undefined) {
-      return extractValue(data[name])
-    }
-  }
-
-  const keys = Object.keys(data)
+function getValue(data, keys, fallback = 0) {
+  if (!data || typeof data !== 'object') return fallback
 
   for (const key of keys) {
-    const lower = key.toLowerCase()
-
-    for (const name of names) {
-      if (lower.includes(name.toLowerCase())) {
-        return extractValue(data[key])
-      }
+    if (data[key] !== undefined && data[key] !== null) {
+      return data[key]
     }
   }
 
-  return 0
+  return fallback
 }
 
-function normalizeRows(response) {
-  if (!response) {
-    return []
-  }
+function Card({ icon: Icon, title, value, description }) {
+  return (
+    <div className="kpi-card">
+      <div className="kpi-top">
+        <div className="kpi-icon">
+          <Icon size={22} />
+        </div>
 
-  if (Array.isArray(response)) {
-    return response
-  }
+        <span className="kpi-live">
+          <span className="live-dot"></span>
+          Live
+        </span>
+      </div>
 
-  if (Array.isArray(response.data)) {
-    return response.data
-  }
+      <div className="kpi-title">{title}</div>
 
-  if (response.data && Array.isArray(response.data.data)) {
-    return response.data.data
-  }
+      <div className="kpi-value">{value}</div>
 
-  return []
+      <div className="kpi-description">
+        {description}
+      </div>
+
+      <div className="kpi-footer">
+        <TrendingUp size={15} />
+        Updated from live data
+      </div>
+    </div>
+  )
+}
+
+function EmptyChart({ icon: Icon, title, message }) {
+  return (
+    <div className="chart-card">
+      <div className="chart-header">
+        <div className="chart-title">
+          <div className="chart-icon">
+            <Icon size={20} />
+          </div>
+          <h3>{title}</h3>
+        </div>
+      </div>
+
+      <div className="empty-chart">
+        <BarChart3 size={42} />
+        <strong>Awaiting data</strong>
+        <span>{message}</span>
+      </div>
+    </div>
+  )
 }
 
 export default function Dashboard() {
-  const navigate = useNavigate()
+  const [darkMode, setDarkMode] = useState(
+    localStorage.getItem('metricmind_theme') === 'dark'
+  )
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [online, setOnline] = useState(false)
   const [error, setError] = useState('')
+  const [online, setOnline] = useState(false)
 
-  const [kpis, setKpis] = useState({
-    revenue: 0,
-    profit: 0,
-    orders: 0,
-    customers: 0,
-  })
-
+  const [kpis, setKpis] = useState({})
   const [regionData, setRegionData] = useState([])
   const [categoryData, setCategoryData] = useState([])
-  const [productData, setProductData] = useState([])
+  const [topProducts, setTopProducts] = useState([])
 
-  const [darkMode, setDarkMode] = useState(function () {
-    return localStorage.getItem('metricmind_theme') === 'dark'
-  })
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode)
 
-  async function askBackend(question) {
+    localStorage.setItem(
+      'metricmind_theme',
+      darkMode ? 'dark' : 'light'
+    )
+  }, [darkMode])
+
+  const loadDashboard = async () => {
     try {
-      const response = await apiService.query(question)
+      setError('')
 
-      if (response && response.data) {
-        return response.data
+      const healthResponse = await apiService.health()
+
+      if (healthResponse?.data) {
+        setOnline(true)
       }
 
-      return null
-    } catch (requestError) {
-      console.error('Query failed:', question, requestError)
-      return null
-    }
-  }
-
-  async function loadDashboard() {
-    setError('')
-
-    try {
-      await apiService.health()
-      setOnline(true)
-    } catch (healthError) {
-      console.error('Backend health error:', healthError)
-      setOnline(false)
-      setError(
-        'Backend is not available. Start MetricMind backend on port 8001.'
-      )
-      setLoading(false)
-      setRefreshing(false)
-      return
-    }
-
-    try {
       const [
-        revenueResponse,
-        profitResponse,
-        ordersResponse,
-        customersResponse,
+        kpiResponse,
         regionResponse,
         categoryResponse,
         productResponse,
-      ] = await Promise.all([
-        askBackend('What is the total sales revenue?'),
-        askBackend('What is the total profit?'),
-        askBackend('How many unique orders are there?'),
-        askBackend('How many unique customers are there?'),
-        askBackend('What is total sales revenue by region?'),
-        askBackend('What is total sales revenue by category?'),
-        askBackend('What are the top 10 products by sales revenue?'),
+      ] = await Promise.allSettled([
+        apiService.getDashboardKPIs(),
+        apiService.getSalesByRegion(),
+        apiService.getSalesByCategory(),
+        apiService.getTopProducts(10),
       ])
 
-      setKpis({
-        revenue: findNumericValue(
-          revenueResponse,
-          ['sales', 'revenue', 'total_sales', 'total_revenue']
-        ),
-        profit: findNumericValue(
-          profitResponse,
-          ['profit', 'total_profit']
-        ),
-        orders: findNumericValue(
-          ordersResponse,
-          ['orders', 'order_count', 'unique_orders', 'count']
-        ),
-        customers: findNumericValue(
-          customersResponse,
-          [
-            'customers',
-            'customer_count',
-            'unique_customers',
-            'count',
-          ]
-        ),
-      })
+      if (kpiResponse.status === 'fulfilled') {
+        setKpis(kpiResponse.value?.data || {})
+      }
 
-      setRegionData(normalizeRows(regionResponse))
-      setCategoryData(normalizeRows(categoryResponse))
-      setProductData(normalizeRows(productResponse))
-    } catch (dashboardError) {
-      console.error('Dashboard loading error:', dashboardError)
+      if (regionResponse.status === 'fulfilled') {
+        const data = regionResponse.value?.data
 
+        setRegionData(
+          Array.isArray(data)
+            ? data
+            : data?.data || data?.results || data?.regions || []
+        )
+      }
+
+      if (categoryResponse.status === 'fulfilled') {
+        const data = categoryResponse.value?.data
+
+        setCategoryData(
+          Array.isArray(data)
+            ? data
+            : data?.data || data?.results || data?.categories || []
+        )
+      }
+
+      if (productResponse.status === 'fulfilled') {
+        const data = productResponse.value?.data
+
+        setTopProducts(
+          Array.isArray(data)
+            ? data
+            : data?.data || data?.results || data?.products || []
+        )
+      }
+    } catch (err) {
+      console.error('Dashboard error:', err)
+      setOnline(false)
       setError(
-        'Dashboard data could not be loaded. Check the backend logs.'
+        'Unable to connect to the MetricMind backend on port 8001.'
       )
     } finally {
       setLoading(false)
@@ -218,388 +186,434 @@ export default function Dashboard() {
     }
   }
 
-  useEffect(function () {
+  useEffect(() => {
     loadDashboard()
   }, [])
 
-  useEffect(
-    function () {
-      if (darkMode) {
-        document.body.classList.add('metricmind-dark')
-        localStorage.setItem('metricmind_theme', 'dark')
-      } else {
-        document.body.classList.remove('metricmind-dark')
-        localStorage.setItem('metricmind_theme', 'light')
-      }
-    },
-    [darkMode]
+  const refreshDashboard = async () => {
+    setRefreshing(true)
+    await loadDashboard()
+  }
+
+  const revenue = getValue(
+    kpis,
+    ['total_revenue', 'revenue', 'total_sales', 'sales']
   )
 
-  function refreshDashboard() {
-    setRefreshing(true)
-    loadDashboard()
-  }
+  const profit = getValue(
+    kpis,
+    ['total_profit', 'profit']
+  )
 
-  function openQuery() {
-    navigate('/query')
-  }
+  const orders = getValue(
+    kpis,
+    ['total_orders', 'orders', 'order_count']
+  )
+
+  const customers = getValue(
+    kpis,
+    ['total_customers', 'customers', 'customer_count']
+  )
+
+  const maxRegionValue = useMemo(() => {
+    if (!regionData.length) return 1
+
+    return Math.max(
+      ...regionData.map((item) =>
+        Number(
+          getValue(
+            item,
+            ['revenue', 'sales', 'total_revenue', 'value']
+          )
+        )
+      ),
+      1
+    )
+  }, [regionData])
+
+  const maxProductValue = useMemo(() => {
+    if (!topProducts.length) return 1
+
+    return Math.max(
+      ...topProducts.map((item) =>
+        Number(
+          getValue(
+            item,
+            ['revenue', 'sales', 'total_sales', 'value']
+          )
+        )
+      ),
+      1
+    )
+  }, [topProducts])
 
   return (
     <div className="dashboard-page">
+
+      {/* HEADER */}
       <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <div className="dashboard-logo">
-            <Sparkles size={28} />
+        <div className="brand-area">
+          <div className="brand-logo">
+            <BrainCircuit size={30} />
           </div>
 
           <div>
-            <h1>MetricMind</h1>
-            <p>Welcome back. Here is your business overview.</p>
+            <h1>Metric<span>Mind</span></h1>
+            <p>Business Intelligence</p>
           </div>
         </div>
 
-        <div className="dashboard-actions">
-          <div
-            className={
-              online
-                ? 'api-status online'
-                : 'api-status offline'
-            }
-          >
-            <span></span>
-            {online ? 'API Online' : 'API Offline'}
+        <div className="header-actions">
+          <div className={`api-status ${online ? 'online' : 'offline'}`}>
+            <span className="status-dot"></span>
+            API {online ? 'Online' : 'Offline'}
           </div>
 
           <button
             className="icon-button"
-            onClick={function () {
-              setDarkMode(!darkMode)
-            }}
+            onClick={() => setDarkMode(!darkMode)}
             title="Toggle dark mode"
           >
-            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+            {darkMode ? (
+              <Sun size={20} />
+            ) : (
+              <Moon size={20} />
+            )}
           </button>
 
           <button
-            className="refresh-button"
+            className="icon-button"
             onClick={refreshDashboard}
             disabled={refreshing}
+            title="Refresh dashboard"
           >
             <RefreshCw
-              size={18}
+              size={20}
               className={refreshing ? 'spin' : ''}
             />
-            Refresh
           </button>
+
+          <Link to="/query" className="ask-button">
+            <Sparkles size={18} />
+            Ask a Question
+            <ArrowRight size={17} />
+          </Link>
         </div>
       </header>
 
-      {error && (
-        <div className="dashboard-error">
-          <Activity size={20} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      <section className="kpi-grid">
-        <div className="kpi-card">
-          <div className="kpi-icon">
-            <DollarSign size={24} />
+      {/* HERO */}
+      <section className="dashboard-hero">
+        <div>
+          <div className="eyebrow">
+            METRICMIND INTELLIGENCE
           </div>
 
-          <div className="kpi-content">
-            <span>Total Revenue</span>
+          <h2>
+            Good morning,
+            <br />
+            <span>there.</span>
+          </h2>
 
-            <strong>
-              {loading ? 'Loading...' : formatCurrency(kpis.revenue)}
-            </strong>
-
-            <small>
-              <TrendingUp size={15} />
-              From live dataset
-            </small>
-          </div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="kpi-icon">
-            <TrendingUp size={24} />
-          </div>
-
-          <div className="kpi-content">
-            <span>Total Profit</span>
-
-            <strong>
-              {loading ? 'Loading...' : formatCurrency(kpis.profit)}
-            </strong>
-
-            <small>
-              <TrendingUp size={15} />
-              Net profit
-            </small>
-          </div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="kpi-icon">
-            <ShoppingCart size={24} />
-          </div>
-
-          <div className="kpi-content">
-            <span>Total Orders</span>
-
-            <strong>
-              {loading ? 'Loading...' : formatNumber(kpis.orders)}
-            </strong>
-
-            <small>
-              <ShoppingCart size={15} />
-              Unique orders
-            </small>
-          </div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="kpi-icon">
-            <Users size={24} />
-          </div>
-
-          <div className="kpi-content">
-            <span>Total Customers</span>
-
-            <strong>
-              {loading ? 'Loading...' : formatNumber(kpis.customers)}
-            </strong>
-
-            <small>
-              <Users size={15} />
-              Unique customers
-            </small>
-          </div>
-        </div>
-      </section>
-
-      <section className="copilot-banner">
-        <div className="copilot-icon">
-          <Bot size={30} />
-        </div>
-
-        <div className="copilot-text">
-          <span>YOUR ANALYTICS COPILOT</span>
-          <h2>Turn a business question into a confident next move.</h2>
           <p>
-            Ask questions about your business data using natural
-            language.
+            A live pulse check of your MetricMind workspace.
           </p>
         </div>
 
-        <button
-          className="copilot-button"
-          onClick={openQuery}
-        >
-          Ask a Question
-          <ArrowUpRight size={19} />
-        </button>
+        <div className="hero-badge">
+          <Activity size={18} />
+          Real-time analytics
+        </div>
       </section>
 
-      <section className="charts-section">
-        <div className="section-title">
-          <div>
-            <span>LIVE ANALYTICS</span>
-            <h2>Sales Performance</h2>
+      {/* ERROR */}
+      {error && (
+        <div className="dashboard-error">
+          <Activity size={19} />
+          <span>{error}</span>
+
+          <button onClick={refreshDashboard}>
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {/* KPI CARDS */}
+      <section className="kpi-grid">
+        <Card
+          icon={TrendingUp}
+          title="Total Revenue"
+          value={
+            loading
+              ? '—'
+              : formatCurrency(revenue)
+          }
+          description="Revenue from all transactions"
+        />
+
+        <Card
+          icon={Activity}
+          title="Total Profit"
+          value={
+            loading
+              ? '—'
+              : formatCurrency(profit)
+          }
+          description="Net profit after costs"
+        />
+
+        <Card
+          icon={ShoppingCart}
+          title="Total Orders"
+          value={
+            loading
+              ? '—'
+              : formatNumber(orders)
+          }
+          description="Number of unique orders"
+        />
+
+        <Card
+          icon={Users}
+          title="Customers"
+          value={
+            loading
+              ? '—'
+              : formatNumber(customers)
+          }
+          description="Unique customer count"
+        />
+      </section>
+
+      {/* AI COPILOT */}
+      <section className="copilot-card">
+        <div className="copilot-icon">
+          <Sparkles size={25} />
+        </div>
+
+        <div className="copilot-content">
+          <div className="eyebrow">
+            YOUR ANALYTICS COPILOT
           </div>
 
-          <Database size={24} />
+          <h3>
+            Turn a business question into a
+            confident next move.
+          </h3>
+
+          <p>
+            Ask questions about your business data
+            using natural language.
+          </p>
+        </div>
+
+        <Link to="/query" className="copilot-button">
+          Ask a Question
+          <ArrowRight size={18} />
+        </Link>
+      </section>
+
+      {/* CHARTS */}
+      <section className="analytics-section">
+        <div className="section-heading">
+          <div>
+            <div className="eyebrow">SALES PERFORMANCE</div>
+            <h2>Business performance at a glance</h2>
+          </div>
+
+          <Link to="/analytics">
+            View Analytics
+            <ArrowRight size={17} />
+          </Link>
         </div>
 
         <div className="charts-grid">
-          <div className="chart-card">
-            <div className="chart-header">
-              <div>
-                <BarChart3 size={22} />
-                <h3>Revenue by Region</h3>
-              </div>
-            </div>
 
-            {regionData.length === 0 ? (
-              <div className="empty-chart">
-                <Database size={32} />
-                <strong>No region data</strong>
-                <p>
-                  Upload and activate your dataset, then refresh
-                  the dashboard.
-                </p>
+          {/* REGION */}
+          {regionData.length > 0 ? (
+            <div className="chart-card">
+              <div className="chart-header">
+                <div className="chart-title">
+                  <div className="chart-icon">
+                    <BarChart3 size={20} />
+                  </div>
+                  <h3>Revenue by Region</h3>
+                </div>
               </div>
-            ) : (
-              <div className="bar-list">
-                {regionData.slice(0, 8).map(function (item, index) {
-                  const label =
-                    item.region ||
-                    item.Region ||
-                    item.name ||
-                    item.label ||
-                    'Region ' + (index + 1)
 
-                  const value = findNumericValue(
+              <div className="bars">
+                {regionData.slice(0, 6).map((item, index) => {
+                  const name = getValue(
                     item,
-                    ['sales', 'revenue', 'total_sales']
+                    ['region', 'name', 'label'],
+                    `Region ${index + 1}`
                   )
 
-                  const maxValue = Math.max(
-                    ...regionData.map(function (row) {
-                      return findNumericValue(row, [
-                        'sales',
-                        'revenue',
-                        'total_sales',
-                      ])
-                    }),
-                    1
+                  const value = Number(
+                    getValue(
+                      item,
+                      ['revenue', 'sales', 'total_revenue', 'value']
+                    )
                   )
 
                   const width =
-                    Math.max((value / maxValue) * 100, 3)
+                    Math.max(
+                      5,
+                      (value / maxRegionValue) * 100
+                    )
 
                   return (
                     <div className="bar-row" key={index}>
                       <div className="bar-label">
-                        <span>{label}</span>
-                        <b>{formatCurrency(value)}</b>
+                        <span>{name}</span>
+                        <strong>
+                          {formatCurrency(value)}
+                        </strong>
                       </div>
 
                       <div className="bar-track">
                         <div
                           className="bar-fill"
-                          style={{ width: width + '%' }}
-                        ></div>
+                          style={{ width: `${width}%` }}
+                        />
                       </div>
                     </div>
                   )
                 })}
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <EmptyChart
+              icon={BarChart3}
+              title="Revenue by Region"
+              message="Upload and activate your dataset to display regional analytics."
+            />
+          )}
 
-          <div className="chart-card">
+          {/* CATEGORY */}
+          {categoryData.length > 0 ? (
+            <div className="chart-card">
+              <div className="chart-header">
+                <div className="chart-title">
+                  <div className="chart-icon">
+                    <PieChart size={20} />
+                  </div>
+                  <h3>Revenue by Category</h3>
+                </div>
+              </div>
+
+              <div className="category-list">
+                {categoryData.slice(0, 6).map((item, index) => {
+                  const name = getValue(
+                    item,
+                    ['category', 'name', 'label'],
+                    `Category ${index + 1}`
+                  )
+
+                  const value = Number(
+                    getValue(
+                      item,
+                      ['revenue', 'sales', 'total_revenue', 'value']
+                    )
+                  )
+
+                  return (
+                    <div className="category-item" key={index}>
+                      <div className="category-left">
+                        <span className="category-number">
+                          {index + 1}
+                        </span>
+
+                        <span>{name}</span>
+                      </div>
+
+                      <strong>
+                        {formatCurrency(value)}
+                      </strong>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            <EmptyChart
+              icon={PieChart}
+              title="Revenue by Category"
+              message="Upload and activate your dataset to display category analytics."
+            />
+          )}
+
+        </div>
+      </section>
+
+      {/* PRODUCTS */}
+      <section className="products-section">
+
+        {topProducts.length > 0 ? (
+          <div className="chart-card full-width">
             <div className="chart-header">
-              <div>
-                <Activity size={22} />
-                <h3>Revenue by Category</h3>
+              <div className="chart-title">
+                <div className="chart-icon">
+                  <Database size={20} />
+                </div>
+
+                <h3>Top 10 Products</h3>
               </div>
             </div>
 
-            {categoryData.length === 0 ? (
-              <div className="empty-chart">
-                <Database size={32} />
-                <strong>No category data</strong>
-                <p>
-                  Upload and activate your dataset, then refresh
-                  the dashboard.
-                </p>
-              </div>
-            ) : (
-              <div className="bar-list">
-                {categoryData
-                  .slice(0, 8)
-                  .map(function (item, index) {
-                    const label =
-                      item.category ||
-                      item.Category ||
-                      item.name ||
-                      item.label ||
-                      'Category ' + (index + 1)
+            <div className="bars">
+              {topProducts.slice(0, 10).map((item, index) => {
+                const name = getValue(
+                  item,
+                  ['product_name', 'product', 'name', 'label'],
+                  `Product ${index + 1}`
+                )
 
-                    const value = findNumericValue(
-                      item,
-                      ['sales', 'revenue', 'total_sales']
-                    )
+                const value = Number(
+                  getValue(
+                    item,
+                    ['revenue', 'sales', 'total_sales', 'value']
+                  )
+                )
 
-                    const maxValue = Math.max(
-                      ...categoryData.map(function (row) {
-                        return findNumericValue(row, [
-                          'sales',
-                          'revenue',
-                          'total_sales',
-                        ])
-                      }),
-                      1
-                    )
+                const width =
+                  Math.max(
+                    5,
+                    (value / maxProductValue) * 100
+                  )
 
-                    const width = Math.max(
-                      (value / maxValue) * 100,
-                      3
-                    )
+                return (
+                  <div className="bar-row" key={index}>
+                    <div className="bar-label">
+                      <span>
+                        {index + 1}. {name}
+                      </span>
 
-                    return (
-                      <div className="bar-row" key={index}>
-                        <div className="bar-label">
-                          <span>{label}</span>
-                          <b>{formatCurrency(value)}</b>
-                        </div>
+                      <strong>
+                        {formatCurrency(value)}
+                      </strong>
+                    </div>
 
-                        <div className="bar-track">
-                          <div
-                            className="bar-fill secondary"
-                            style={{
-                              width: width + '%',
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="products-card">
-        <div className="chart-header">
-          <div>
-            <ShoppingCart size={22} />
-            <h3>Top 10 Products</h3>
-          </div>
-        </div>
-
-        {productData.length === 0 ? (
-          <div className="empty-products">
-            <Database size={30} />
-            <strong>No product data available</strong>
-            <p>
-              Upload your dataset and refresh the dashboard.
-            </p>
+                    <div className="bar-track">
+                      <div
+                        className="bar-fill"
+                        style={{ width: `${width}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         ) : (
-          <div className="product-list">
-            {productData.slice(0, 10).map(function (item, index) {
-              const name =
-                item.product_name ||
-                item.product ||
-                item.Product ||
-                item.name ||
-                'Product ' + (index + 1)
-
-              const sales = findNumericValue(item, [
-                'sales',
-                'revenue',
-                'total_sales',
-              ])
-
-              return (
-                <div className="product-row" key={index}>
-                  <span className="product-rank">
-                    {index + 1}
-                  </span>
-
-                  <span className="product-name">{name}</span>
-
-                  <strong>{formatCurrency(sales)}</strong>
-                </div>
-              )
-            })}
-          </div>
+          <EmptyChart
+            icon={Database}
+            title="Top 10 Products"
+            message="Upload and activate your dataset to display product analytics."
+          />
         )}
+
       </section>
+
     </div>
   )
 }

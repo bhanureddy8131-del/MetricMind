@@ -5,15 +5,14 @@ const API_BASE_URL =
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Add JWT token
 api.interceptors.request.use(
-  function (config) {
+  (config) => {
     const token = localStorage.getItem('metricmind_token')
 
     if (token) {
@@ -23,39 +22,27 @@ api.interceptors.request.use(
 
     return config
   },
-  function (error) {
-    return Promise.reject(error)
-  }
+  (error) => Promise.reject(error)
 )
 
-// Handle API errors
 api.interceptors.response.use(
-  function (response) {
-    return response
-  },
-  function (error) {
-    if (error.response) {
-      if (error.response.status === 401) {
-        localStorage.removeItem('metricmind_token')
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('metricmind_token')
 
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login'
-        }
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
       }
-
-      const detail = error.response.data
-        ? error.response.data.detail
-        : null
-
-      const message =
-        typeof detail === 'string'
-          ? detail
-          : 'MetricMind backend returned an error.'
-
-      return Promise.reject(new Error(message))
     }
 
-    if (error.request) {
+    if (error.response?.data?.detail) {
+      return Promise.reject(
+        new Error(error.response.data.detail)
+      )
+    }
+
+    if (error.code === 'ERR_NETWORK') {
       return Promise.reject(
         new Error(
           'Cannot connect to MetricMind backend. Make sure the backend is running on port 8001.'
@@ -64,178 +51,129 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(
-      new Error('Unable to send request to MetricMind backend.')
+      new Error('MetricMind request failed.')
     )
   }
 )
 
 export const apiService = {
-  // ---------------------------------
-  // SYSTEM
-  // ---------------------------------
+  health: () =>
+    api.get('/health'),
 
-  health: function () {
-    return api.get('/health')
-  },
+  status: () =>
+    api.get('/status'),
 
-  metrics: function () {
-    return api.get('/metrics')
-  },
+  login: (email, password) =>
+    api.post('/v1/auth/login', {
+      email,
+      password,
+    }),
 
-  dimensions: function () {
-    return api.get('/dimensions')
-  },
+  register: (full_name, username, email, password) =>
+    api.post('/v1/auth/register', {
+      full_name,
+      username,
+      email,
+      password,
+    }),
 
-  // ---------------------------------
-  // AUTH
-  // ---------------------------------
+  logout: () =>
+    api.post('/v1/auth/logout'),
 
-  login: function (email, password) {
-    return api.post('/v1/auth/login', {
-      email: email,
-      password: password,
-    })
-  },
+  getCurrentUser: () =>
+    api.get('/v1/auth/me'),
 
-  register: function (full_name, username, email, password) {
-    return api.post('/v1/auth/register', {
-      full_name: full_name,
-      username: username,
-      email: email,
-      password: password,
-    })
-  },
+  refreshToken: () =>
+    api.post('/v1/auth/refresh'),
 
-  logout: function () {
-    return api.post('/v1/auth/logout')
-  },
+  metrics: () =>
+    api.get('/metrics'),
 
-  getCurrentUser: function () {
-    return api.get('/v1/auth/me')
-  },
+  dimensions: () =>
+    api.get('/dimensions'),
 
-  refreshToken: function () {
-    return api.post('/v1/auth/refresh')
-  },
+  query: (question) =>
+    api.post('/query', {
+      question,
+    }),
 
-  // ---------------------------------
-  // AI QUERY
-  // ---------------------------------
+  generateSql: (payload) =>
+    api.post('/sql/generate', payload),
 
-  query: function (question) {
-    return api.post('/query', {
-      question: question,
-    })
-  },
+  validateSql: (sql) =>
+    api.post('/sql/validate', {
+      sql,
+    }),
 
-  generateSql: function (payload) {
-    return api.post('/sql/generate', payload)
-  },
+  agentIntent: (question) =>
+    api.post('/agent/intent', {
+      question,
+    }),
 
-  validateSql: function (sql) {
-    return api.post('/sql/validate', {
-      sql: sql,
-    })
-  },
+  agentTools: () =>
+    api.get('/agent/tools'),
 
-  agentIntent: function (question) {
-    return api.post('/agent/intent', {
-      question: question,
-    })
-  },
+  analyze: (data, metrics, dimensions) =>
+    api.post('/analysis', {
+      data,
+      metrics,
+      dimensions,
+    }),
 
-  agentTools: function () {
-    return api.get('/agent/tools')
-  },
-
-  analyze: function (data, metrics, dimensions) {
-    return api.post('/analysis', {
-      data: data,
-      metrics: metrics,
-      dimensions: dimensions,
-    })
-  },
-
-  // ---------------------------------
-  // DATA
-  // ---------------------------------
-
-  getSalesData: function (page, pageSize, filters) {
-    const currentPage = page || 1
-    const currentPageSize = pageSize || 25
-    const currentFilters = filters || {}
-
-    return api.get('/v1/data', {
+  getSalesData: (page = 1, pageSize = 25, filters = {}) =>
+    api.get('/v1/data', {
       params: {
-        page: currentPage,
-        page_size: currentPageSize,
-        ...currentFilters,
+        page,
+        page_size: pageSize,
+        ...filters,
       },
-    })
-  },
+    }),
 
-  createSalesRecord: function (record) {
-    return api.post('/v1/data', record)
-  },
+  createSalesRecord: (record) =>
+    api.post('/v1/data', record),
 
-  updateSalesRecord: function (rowId, record) {
-    return api.put('/v1/data/' + rowId, record)
-  },
+  updateSalesRecord: (rowId, record) =>
+    api.put('/v1/data/' + rowId, record),
 
-  deleteSalesRecord: function (rowId) {
-    return api.delete('/v1/data/' + rowId)
-  },
+  deleteSalesRecord: (rowId) =>
+    api.delete('/v1/data/' + rowId),
 
-  // ---------------------------------
-  // OPTIONAL ANALYTICS ENDPOINTS
-  // ---------------------------------
+  getDashboardKPIs: (filters = {}) =>
+    api.get('/v1/analytics/kpis', {
+      params: filters,
+    }),
 
-  getDashboardKPIs: function (filters) {
-    return api.get('/v1/analytics/kpis', {
-      params: filters || {},
-    })
-  },
+  getSalesByRegion: (filters = {}) =>
+    api.get('/v1/analytics/sales-by-region', {
+      params: filters,
+    }),
 
-  getSalesByRegion: function (filters) {
-    return api.get('/v1/analytics/sales-by-region', {
-      params: filters || {},
-    })
-  },
+  getSalesByCategory: (filters = {}) =>
+    api.get('/v1/analytics/sales-by-category', {
+      params: filters,
+    }),
 
-  getSalesByCategory: function (filters) {
-    return api.get('/v1/analytics/sales-by-category', {
-      params: filters || {},
-    })
-  },
-
-  getTopProducts: function (limit, filters) {
-    return api.get('/v1/analytics/top-products', {
+  getTopProducts: (limit = 10, filters = {}) =>
+    api.get('/v1/analytics/top-products', {
       params: {
-        limit: limit || 10,
-        ...(filters || {}),
+        limit,
+        ...filters,
       },
-    })
-  },
+    }),
 
-  getSalesTrend: function (period, filters) {
-    return api.get('/v1/analytics/sales-trend', {
+  getSalesTrend: (period = 'month', filters = {}) =>
+    api.get('/v1/analytics/sales-trend', {
       params: {
-        period: period || 'month',
-        ...(filters || {}),
+        period,
+        ...filters,
       },
-    })
-  },
+    }),
 
-  // ---------------------------------
-  // DATA LOADING
-  // ---------------------------------
-
-  loadData: function (filePath, overwrite) {
-    return api.post('/data/load', {
-      file_path: filePath || null,
-      overwrite: overwrite || false,
-    })
-  },
+  loadData: (filePath = null, overwrite = false) =>
+    api.post('/data/load', {
+      file_path: filePath,
+      overwrite,
+    }),
 }
 
 export default api
