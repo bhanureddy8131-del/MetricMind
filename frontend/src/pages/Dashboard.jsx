@@ -1,188 +1,251 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import {
   Activity,
-  ArrowRight,
   BarChart3,
-  BrainCircuit,
   Database,
   Moon,
   PieChart,
   RefreshCw,
   Sparkles,
   Sun,
+  TrendingUp,
   Users,
   ShoppingCart,
-  TrendingUp,
+  Upload,
 } from 'lucide-react'
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts'
+import { Link } from 'react-router-dom'
+
 import { apiService } from '../services/api'
+import { useTheme } from '../context/ThemeContext'
 import './Dashboard.css'
 
-function formatCurrency(value) {
-  const number = Number(value || 0)
+const fallbackRegion = [
+  { region: 'West', revenue: 0 },
+  { region: 'East', revenue: 0 },
+  { region: 'Central', revenue: 0 },
+  { region: 'South', revenue: 0 },
+]
 
+const fallbackCategory = [
+  { category: 'Technology', revenue: 0 },
+  { category: 'Furniture', revenue: 0 },
+  { category: 'Office Supplies', revenue: 0 },
+]
+
+const fallbackTrend = [
+  { period: 'Jan', revenue: 0 },
+  { period: 'Feb', revenue: 0 },
+  { period: 'Mar', revenue: 0 },
+  { period: 'Apr', revenue: 0 },
+  { period: 'May', revenue: 0 },
+  { period: 'Jun', revenue: 0 },
+]
+
+function getNumber(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
+}
+
+function formatCurrency(value) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 0,
-  }).format(number)
+  }).format(getNumber(value))
 }
 
-function formatNumber(value) {
-  return new Intl.NumberFormat('en-US').format(Number(value || 0))
-}
-
-function getValue(data, keys, fallback = 0) {
-  if (!data || typeof data !== 'object') return fallback
-
-  for (const key of keys) {
-    if (data[key] !== undefined && data[key] !== null) {
-      return data[key]
-    }
-  }
-
-  return fallback
-}
-
-function Card({ icon: Icon, title, value, description }) {
+function Logo() {
   return (
-    <div className="kpi-card">
-      <div className="kpi-top">
-        <div className="kpi-icon">
-          <Icon size={22} />
-        </div>
-
-        <span className="kpi-live">
-          <span className="live-dot"></span>
-          Live
-        </span>
+    <div className="metric-logo">
+      <div className="metric-logo-icon">
+        <Sparkles size={26} />
       </div>
 
-      <div className="kpi-title">{title}</div>
-
-      <div className="kpi-value">{value}</div>
-
-      <div className="kpi-description">
-        {description}
-      </div>
-
-      <div className="kpi-footer">
-        <TrendingUp size={15} />
-        Updated from live data
+      <div>
+        <strong>MetricMind</strong>
+        <span>Business Intelligence</span>
       </div>
     </div>
   )
 }
 
-function EmptyChart({ icon: Icon, title, message }) {
+function KPI({ icon, title, value, description }) {
   return (
-    <div className="chart-card">
-      <div className="chart-header">
-        <div className="chart-title">
-          <div className="chart-icon">
-            <Icon size={20} />
-          </div>
-          <h3>{title}</h3>
-        </div>
+    <div className="kpi-card">
+      <div className="kpi-icon">
+        {icon}
       </div>
 
-      <div className="empty-chart">
-        <BarChart3 size={42} />
-        <strong>Awaiting data</strong>
-        <span>{message}</span>
+      <div className="kpi-content">
+        <span>{title}</span>
+        <strong>{value}</strong>
+        <small>{description}</small>
       </div>
     </div>
   )
 }
 
 export default function Dashboard() {
-  const [darkMode, setDarkMode] = useState(
-    localStorage.getItem('metricmind_theme') === 'dark'
-  )
+  const { isDark, toggleTheme } = useTheme()
 
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+  const [backendOnline, setBackendOnline] = useState(false)
   const [error, setError] = useState('')
-  const [online, setOnline] = useState(false)
 
-  const [kpis, setKpis] = useState({})
-  const [regionData, setRegionData] = useState([])
-  const [categoryData, setCategoryData] = useState([])
-  const [topProducts, setTopProducts] = useState([])
+  const [kpis, setKpis] = useState({
+    revenue: 0,
+    profit: 0,
+    orders: 0,
+    customers: 0,
+  })
 
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', darkMode)
-
-    localStorage.setItem(
-      'metricmind_theme',
-      darkMode ? 'dark' : 'light'
-    )
-  }, [darkMode])
+  const [regionData, setRegionData] = useState(fallbackRegion)
+  const [categoryData, setCategoryData] = useState(fallbackCategory)
+  const [trendData, setTrendData] = useState(fallbackTrend)
 
   const loadDashboard = async () => {
+    setLoading(true)
+    setError('')
+
     try {
-      setError('')
+      await apiService.health()
 
-      const healthResponse = await apiService.health()
+      setBackendOnline(true)
 
-      if (healthResponse?.data) {
-        setOnline(true)
-      }
-
-      const [
-        kpiResponse,
-        regionResponse,
-        categoryResponse,
-        productResponse,
-      ] = await Promise.allSettled([
+      const requests = await Promise.allSettled([
         apiService.getDashboardKPIs(),
         apiService.getSalesByRegion(),
         apiService.getSalesByCategory(),
-        apiService.getTopProducts(10),
+        apiService.getSalesTrend('month'),
       ])
 
-      if (kpiResponse.status === 'fulfilled') {
-        setKpis(kpiResponse.value?.data || {})
+      const [kpiResult, regionResult, categoryResult, trendResult] =
+        requests
+
+      if (kpiResult.status === 'fulfilled') {
+        const data = kpiResult.value.data || {}
+
+        setKpis({
+          revenue: getNumber(
+            data.total_revenue ??
+              data.revenue ??
+              data.sales
+          ),
+          profit: getNumber(
+            data.total_profit ??
+              data.profit
+          ),
+          orders: getNumber(
+            data.total_orders ??
+              data.orders
+          ),
+          customers: getNumber(
+            data.total_customers ??
+              data.customers
+          ),
+        })
       }
 
-      if (regionResponse.status === 'fulfilled') {
-        const data = regionResponse.value?.data
+      if (regionResult.status === 'fulfilled') {
+        const raw =
+          regionResult.value.data?.data ||
+          regionResult.value.data?.regions ||
+          regionResult.value.data ||
+          []
 
-        setRegionData(
-          Array.isArray(data)
-            ? data
-            : data?.data || data?.results || data?.regions || []
-        )
+        if (Array.isArray(raw) && raw.length) {
+          setRegionData(
+            raw.map((item) => ({
+              region:
+                item.region ||
+                item.name ||
+                item.Region ||
+                'Unknown',
+              revenue: getNumber(
+                item.revenue ??
+                  item.sales ??
+                  item.total_revenue
+              ),
+            }))
+          )
+        }
       }
 
-      if (categoryResponse.status === 'fulfilled') {
-        const data = categoryResponse.value?.data
+      if (categoryResult.status === 'fulfilled') {
+        const raw =
+          categoryResult.value.data?.data ||
+          categoryResult.value.data?.categories ||
+          categoryResult.value.data ||
+          []
 
-        setCategoryData(
-          Array.isArray(data)
-            ? data
-            : data?.data || data?.results || data?.categories || []
-        )
+        if (Array.isArray(raw) && raw.length) {
+          setCategoryData(
+            raw.map((item) => ({
+              category:
+                item.category ||
+                item.name ||
+                item.Category ||
+                'Unknown',
+              revenue: getNumber(
+                item.revenue ??
+                  item.sales ??
+                  item.total_revenue
+              ),
+            }))
+          )
+        }
       }
 
-      if (productResponse.status === 'fulfilled') {
-        const data = productResponse.value?.data
+      if (trendResult.status === 'fulfilled') {
+        const raw =
+          trendResult.value.data?.data ||
+          trendResult.value.data?.trend ||
+          trendResult.value.data ||
+          []
 
-        setTopProducts(
-          Array.isArray(data)
-            ? data
-            : data?.data || data?.results || data?.products || []
-        )
+        if (Array.isArray(raw) && raw.length) {
+          setTrendData(
+            raw.map((item) => ({
+              period:
+                item.period ||
+                item.month ||
+                item.date ||
+                item.year ||
+                'Period',
+              revenue: getNumber(
+                item.revenue ??
+                  item.sales ??
+                  item.total_revenue
+              ),
+            }))
+          )
+        }
       }
     } catch (err) {
       console.error('Dashboard error:', err)
-      setOnline(false)
+
+      setBackendOnline(false)
       setError(
-        'Unable to connect to the MetricMind backend on port 8001.'
+        err.message ||
+          'Backend is not available. Start MetricMind backend on port 8001.'
       )
     } finally {
       setLoading(false)
-      setRefreshing(false)
     }
   }
 
@@ -190,91 +253,31 @@ export default function Dashboard() {
     loadDashboard()
   }, [])
 
-  const refreshDashboard = async () => {
-    setRefreshing(true)
-    await loadDashboard()
-  }
-
-  const revenue = getValue(
-    kpis,
-    ['total_revenue', 'revenue', 'total_sales', 'sales']
-  )
-
-  const profit = getValue(
-    kpis,
-    ['total_profit', 'profit']
-  )
-
-  const orders = getValue(
-    kpis,
-    ['total_orders', 'orders', 'order_count']
-  )
-
-  const customers = getValue(
-    kpis,
-    ['total_customers', 'customers', 'customer_count']
-  )
-
-  const maxRegionValue = useMemo(() => {
-    if (!regionData.length) return 1
-
-    return Math.max(
-      ...regionData.map((item) =>
-        Number(
-          getValue(
-            item,
-            ['revenue', 'sales', 'total_revenue', 'value']
-          )
-        )
-      ),
-      1
-    )
-  }, [regionData])
-
-  const maxProductValue = useMemo(() => {
-    if (!topProducts.length) return 1
-
-    return Math.max(
-      ...topProducts.map((item) =>
-        Number(
-          getValue(
-            item,
-            ['revenue', 'sales', 'total_sales', 'value']
-          )
-        )
-      ),
-      1
-    )
-  }, [topProducts])
-
   return (
     <div className="dashboard-page">
 
-      {/* HEADER */}
       <header className="dashboard-header">
-        <div className="brand-area">
-          <div className="brand-logo">
-            <BrainCircuit size={30} />
-          </div>
-
-          <div>
-            <h1>Metric<span>Mind</span></h1>
-            <p>Business Intelligence</p>
-          </div>
-        </div>
+        <Logo />
 
         <div className="header-actions">
-          <div className={`api-status ${online ? 'online' : 'offline'}`}>
-            <span className="status-dot"></span>
-            API {online ? 'Online' : 'Offline'}
+
+          <div
+            className={
+              backendOnline
+                ? 'api-status online'
+                : 'api-status offline'
+            }
+          >
+            <span />
+            {backendOnline ? 'API Online' : 'API Offline'}
           </div>
 
           <button
             className="icon-button"
-            onClick={() => setDarkMode(!darkMode)}
-            title="Toggle dark mode"
+            onClick={toggleTheme}
+            title="Toggle light/dark mode"
           >
-            {darkMode ? (
+            {isDark ? (
               <Sun size={20} />
             ) : (
               <Moon size={20} />
@@ -282,337 +285,298 @@ export default function Dashboard() {
           </button>
 
           <button
-            className="icon-button"
-            onClick={refreshDashboard}
-            disabled={refreshing}
-            title="Refresh dashboard"
+            className="refresh-button"
+            onClick={loadDashboard}
+            disabled={loading}
           >
             <RefreshCw
-              size={20}
-              className={refreshing ? 'spin' : ''}
+              size={18}
+              className={loading ? 'spin' : ''}
             />
+            Refresh
           </button>
 
-          <Link to="/query" className="ask-button">
-            <Sparkles size={18} />
-            Ask a Question
-            <ArrowRight size={17} />
+          <Link to="/dataset" className="upload-button">
+            <Upload size={18} />
+            Upload Dataset
           </Link>
+
         </div>
       </header>
 
-      {/* HERO */}
-      <section className="dashboard-hero">
-        <div>
-          <div className="eyebrow">
-            METRICMIND INTELLIGENCE
-          </div>
+      <main className="dashboard-main">
 
-          <h2>
-            Good morning,
-            <br />
-            <span>there.</span>
-          </h2>
+        <section className="hero-section">
 
-          <p>
-            A live pulse check of your MetricMind workspace.
-          </p>
-        </div>
-
-        <div className="hero-badge">
-          <Activity size={18} />
-          Real-time analytics
-        </div>
-      </section>
-
-      {/* ERROR */}
-      {error && (
-        <div className="dashboard-error">
-          <Activity size={19} />
-          <span>{error}</span>
-
-          <button onClick={refreshDashboard}>
-            Try Again
-          </button>
-        </div>
-      )}
-
-      {/* KPI CARDS */}
-      <section className="kpi-grid">
-        <Card
-          icon={TrendingUp}
-          title="Total Revenue"
-          value={
-            loading
-              ? '—'
-              : formatCurrency(revenue)
-          }
-          description="Revenue from all transactions"
-        />
-
-        <Card
-          icon={Activity}
-          title="Total Profit"
-          value={
-            loading
-              ? '—'
-              : formatCurrency(profit)
-          }
-          description="Net profit after costs"
-        />
-
-        <Card
-          icon={ShoppingCart}
-          title="Total Orders"
-          value={
-            loading
-              ? '—'
-              : formatNumber(orders)
-          }
-          description="Number of unique orders"
-        />
-
-        <Card
-          icon={Users}
-          title="Customers"
-          value={
-            loading
-              ? '—'
-              : formatNumber(customers)
-          }
-          description="Unique customer count"
-        />
-      </section>
-
-      {/* AI COPILOT */}
-      <section className="copilot-card">
-        <div className="copilot-icon">
-          <Sparkles size={25} />
-        </div>
-
-        <div className="copilot-content">
-          <div className="eyebrow">
-            YOUR ANALYTICS COPILOT
-          </div>
-
-          <h3>
-            Turn a business question into a
-            confident next move.
-          </h3>
-
-          <p>
-            Ask questions about your business data
-            using natural language.
-          </p>
-        </div>
-
-        <Link to="/query" className="copilot-button">
-          Ask a Question
-          <ArrowRight size={18} />
-        </Link>
-      </section>
-
-      {/* CHARTS */}
-      <section className="analytics-section">
-        <div className="section-heading">
           <div>
-            <div className="eyebrow">SALES PERFORMANCE</div>
-            <h2>Business performance at a glance</h2>
+            <p className="eyebrow">
+              METRICMIND INTELLIGENCE
+            </p>
+
+            <h1>
+              Good morning,
+              <br />
+              <span>there.</span>
+            </h1>
+
+            <p className="hero-description">
+              A live pulse check of your business
+              performance.
+            </p>
           </div>
 
-          <Link to="/analytics">
-            View Analytics
-            <ArrowRight size={17} />
-          </Link>
-        </div>
+          <div className="hero-badge">
+            <Activity size={18} />
+            Live analytics
+          </div>
 
-        <div className="charts-grid">
+        </section>
 
-          {/* REGION */}
-          {regionData.length > 0 ? (
-            <div className="chart-card">
-              <div className="chart-header">
-                <div className="chart-title">
-                  <div className="chart-icon">
-                    <BarChart3 size={20} />
-                  </div>
-                  <h3>Revenue by Region</h3>
-                </div>
-              </div>
-
-              <div className="bars">
-                {regionData.slice(0, 6).map((item, index) => {
-                  const name = getValue(
-                    item,
-                    ['region', 'name', 'label'],
-                    `Region ${index + 1}`
-                  )
-
-                  const value = Number(
-                    getValue(
-                      item,
-                      ['revenue', 'sales', 'total_revenue', 'value']
-                    )
-                  )
-
-                  const width =
-                    Math.max(
-                      5,
-                      (value / maxRegionValue) * 100
-                    )
-
-                  return (
-                    <div className="bar-row" key={index}>
-                      <div className="bar-label">
-                        <span>{name}</span>
-                        <strong>
-                          {formatCurrency(value)}
-                        </strong>
-                      </div>
-
-                      <div className="bar-track">
-                        <div
-                          className="bar-fill"
-                          style={{ width: `${width}%` }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ) : (
-            <EmptyChart
-              icon={BarChart3}
-              title="Revenue by Region"
-              message="Upload and activate your dataset to display regional analytics."
-            />
-          )}
-
-          {/* CATEGORY */}
-          {categoryData.length > 0 ? (
-            <div className="chart-card">
-              <div className="chart-header">
-                <div className="chart-title">
-                  <div className="chart-icon">
-                    <PieChart size={20} />
-                  </div>
-                  <h3>Revenue by Category</h3>
-                </div>
-              </div>
-
-              <div className="category-list">
-                {categoryData.slice(0, 6).map((item, index) => {
-                  const name = getValue(
-                    item,
-                    ['category', 'name', 'label'],
-                    `Category ${index + 1}`
-                  )
-
-                  const value = Number(
-                    getValue(
-                      item,
-                      ['revenue', 'sales', 'total_revenue', 'value']
-                    )
-                  )
-
-                  return (
-                    <div className="category-item" key={index}>
-                      <div className="category-left">
-                        <span className="category-number">
-                          {index + 1}
-                        </span>
-
-                        <span>{name}</span>
-                      </div>
-
-                      <strong>
-                        {formatCurrency(value)}
-                      </strong>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ) : (
-            <EmptyChart
-              icon={PieChart}
-              title="Revenue by Category"
-              message="Upload and activate your dataset to display category analytics."
-            />
-          )}
-
-        </div>
-      </section>
-
-      {/* PRODUCTS */}
-      <section className="products-section">
-
-        {topProducts.length > 0 ? (
-          <div className="chart-card full-width">
-            <div className="chart-header">
-              <div className="chart-title">
-                <div className="chart-icon">
-                  <Database size={20} />
-                </div>
-
-                <h3>Top 10 Products</h3>
-              </div>
-            </div>
-
-            <div className="bars">
-              {topProducts.slice(0, 10).map((item, index) => {
-                const name = getValue(
-                  item,
-                  ['product_name', 'product', 'name', 'label'],
-                  `Product ${index + 1}`
-                )
-
-                const value = Number(
-                  getValue(
-                    item,
-                    ['revenue', 'sales', 'total_sales', 'value']
-                  )
-                )
-
-                const width =
-                  Math.max(
-                    5,
-                    (value / maxProductValue) * 100
-                  )
-
-                return (
-                  <div className="bar-row" key={index}>
-                    <div className="bar-label">
-                      <span>
-                        {index + 1}. {name}
-                      </span>
-
-                      <strong>
-                        {formatCurrency(value)}
-                      </strong>
-                    </div>
-
-                    <div className="bar-track">
-                      <div
-                        className="bar-fill"
-                        style={{ width: `${width}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
+        {error && (
+          <div className="error-banner">
+            <Database size={20} />
+            <div>
+              <strong>Backend connection problem</strong>
+              <p>{error}</p>
             </div>
           </div>
-        ) : (
-          <EmptyChart
-            icon={Database}
-            title="Top 10 Products"
-            message="Upload and activate your dataset to display product analytics."
-          />
         )}
 
-      </section>
+        <section className="kpi-grid">
+
+          <KPI
+            icon={<TrendingUp />}
+            title="Total Revenue"
+            value={formatCurrency(kpis.revenue)}
+            description="Revenue from all transactions"
+          />
+
+          <KPI
+            icon={<Activity />}
+            title="Total Profit"
+            value={formatCurrency(kpis.profit)}
+            description="Net profit after costs"
+          />
+
+          <KPI
+            icon={<ShoppingCart />}
+            title="Total Orders"
+            value={kpis.orders.toLocaleString()}
+            description="Number of unique orders"
+          />
+
+          <KPI
+            icon={<Users />}
+            title="Customers"
+            value={kpis.customers.toLocaleString()}
+            description="Unique customer count"
+          />
+
+        </section>
+
+        <section className="copilot-card">
+
+          <div className="copilot-icon">
+            <Sparkles size={28} />
+          </div>
+
+          <div className="copilot-content">
+            <span>YOUR ANALYTICS COPILOT</span>
+            <h2>
+              Turn your business data into clear decisions.
+            </h2>
+            <p>
+              Ask questions about your dataset using
+              natural language.
+            </p>
+          </div>
+
+          <Link to="/query" className="copilot-button">
+            Ask a Question
+            <TrendingUp size={18} />
+          </Link>
+
+        </section>
+
+        <section className="charts-grid">
+
+          <div className="chart-card">
+
+            <div className="chart-header">
+              <div className="chart-title">
+                <BarChart3 size={22} />
+                <div>
+                  <h3>Revenue by Region</h3>
+                  <p>Compare revenue across regions</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="chart-container">
+              <ResponsiveContainer width="100%" height={330}>
+                <BarChart data={regionData}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                  />
+
+                  <XAxis
+                    dataKey="region"
+                    tickLine={false}
+                    axisLine={false}
+                  />
+
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                  />
+
+                  <Tooltip
+                    formatter={(value) =>
+                      formatCurrency(value)
+                    }
+                  />
+
+                  <Bar
+                    dataKey="revenue"
+                    name="Revenue"
+                    radius={[8, 8, 0, 0]}
+                    fill="#3155ff"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+          </div>
+
+          <div className="chart-card">
+
+            <div className="chart-header">
+              <div className="chart-title">
+                <PieChart size={22} />
+                <div>
+                  <h3>Revenue Distribution</h3>
+                  <p>Revenue share by category</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="chart-container">
+              <ResponsiveContainer width="100%" height={330}>
+                <RechartsPieChart>
+
+                  <Pie
+                    data={categoryData}
+                    dataKey="revenue"
+                    nameKey="category"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={115}
+                    innerRadius={55}
+                    paddingAngle={3}
+                  >
+                    {categoryData.map(
+                      (_, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={
+                            [
+                              '#3155ff',
+                              '#7c3aed',
+                              '#06b6d4',
+                              '#10b981',
+                              '#f59e0b',
+                            ][index % 5]
+                          }
+                        />
+                      )
+                    )}
+                  </Pie>
+
+                  <Tooltip
+                    formatter={(value) =>
+                      formatCurrency(value)
+                    }
+                  />
+
+                  <Legend />
+
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            </div>
+
+          </div>
+
+        </section>
+
+        <section className="chart-card full-chart">
+
+          <div className="chart-header">
+            <div className="chart-title">
+              <TrendingUp size={22} />
+
+              <div>
+                <h3>Revenue Trend</h3>
+                <p>
+                  Track revenue performance over time
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="chart-container">
+            <ResponsiveContainer width="100%" height={350}>
+              <LineChart data={trendData}>
+
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
+
+                <XAxis
+                  dataKey="period"
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <Tooltip
+                  formatter={(value) =>
+                    formatCurrency(value)
+                  }
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="revenue"
+                  name="Revenue"
+                  stroke="#3155ff"
+                  strokeWidth={4}
+                  dot={{ r: 4 }}
+                  activeDot={{ r: 7 }}
+                />
+
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+        </section>
+
+      </main>
+
+      <footer className="dashboard-footer">
+        <span>
+          © 2026 MetricMind
+        </span>
+
+        <span>
+          AI-powered business intelligence
+        </span>
+      </footer>
 
     </div>
   )

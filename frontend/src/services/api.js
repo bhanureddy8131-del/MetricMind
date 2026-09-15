@@ -1,7 +1,8 @@
 import axios from 'axios'
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001/api'
+  import.meta.env.VITE_API_BASE_URL ||
+  'http://127.0.0.1:8001/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -17,7 +18,7 @@ api.interceptors.request.use(
 
     if (token) {
       config.headers = config.headers || {}
-      config.headers.Authorization = 'Bearer ' + token
+      config.headers.Authorization = `Bearer ${token}`
     }
 
     return config
@@ -28,40 +29,37 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    const detail = error.response?.data?.detail
+
+    if (status === 401) {
       localStorage.removeItem('metricmind_token')
-
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
-      }
     }
 
-    if (error.response?.data?.detail) {
-      return Promise.reject(
-        new Error(error.response.data.detail)
-      )
+    let message = 'Unable to connect to MetricMind backend.'
+
+    if (typeof detail === 'string') {
+      message = detail
+    } else if (error.code === 'ERR_NETWORK') {
+      message =
+        'Cannot connect to MetricMind backend. Make sure backend is running on port 8001.'
     }
 
-    if (error.code === 'ERR_NETWORK') {
-      return Promise.reject(
-        new Error(
-          'Cannot connect to MetricMind backend. Make sure the backend is running on port 8001.'
-        )
-      )
-    }
-
-    return Promise.reject(
-      new Error('MetricMind request failed.')
-    )
+    return Promise.reject(new Error(message))
   }
 )
 
 export const apiService = {
-  health: () =>
-    api.get('/health'),
+  health: () => api.get('/health'),
 
-  status: () =>
-    api.get('/status'),
+  metrics: () => api.get('/metrics'),
+
+  dimensions: () => api.get('/dimensions'),
+
+  query: (question) =>
+    api.post('/query', {
+      question,
+    }),
 
   login: (email, password) =>
     api.post('/v1/auth/login', {
@@ -82,61 +80,6 @@ export const apiService = {
 
   getCurrentUser: () =>
     api.get('/v1/auth/me'),
-
-  refreshToken: () =>
-    api.post('/v1/auth/refresh'),
-
-  metrics: () =>
-    api.get('/metrics'),
-
-  dimensions: () =>
-    api.get('/dimensions'),
-
-  query: (question) =>
-    api.post('/query', {
-      question,
-    }),
-
-  generateSql: (payload) =>
-    api.post('/sql/generate', payload),
-
-  validateSql: (sql) =>
-    api.post('/sql/validate', {
-      sql,
-    }),
-
-  agentIntent: (question) =>
-    api.post('/agent/intent', {
-      question,
-    }),
-
-  agentTools: () =>
-    api.get('/agent/tools'),
-
-  analyze: (data, metrics, dimensions) =>
-    api.post('/analysis', {
-      data,
-      metrics,
-      dimensions,
-    }),
-
-  getSalesData: (page = 1, pageSize = 25, filters = {}) =>
-    api.get('/v1/data', {
-      params: {
-        page,
-        page_size: pageSize,
-        ...filters,
-      },
-    }),
-
-  createSalesRecord: (record) =>
-    api.post('/v1/data', record),
-
-  updateSalesRecord: (rowId, record) =>
-    api.put('/v1/data/' + rowId, record),
-
-  deleteSalesRecord: (rowId) =>
-    api.delete('/v1/data/' + rowId),
 
   getDashboardKPIs: (filters = {}) =>
     api.get('/v1/analytics/kpis', {
@@ -168,6 +111,24 @@ export const apiService = {
         ...filters,
       },
     }),
+
+  getSalesData: (page = 1, pageSize = 25, filters = {}) =>
+    api.get('/v1/data', {
+      params: {
+        page,
+        page_size: pageSize,
+        ...filters,
+      },
+    }),
+
+  createSalesRecord: (record) =>
+    api.post('/v1/data', record),
+
+  updateSalesRecord: (rowId, record) =>
+    api.put(`/v1/data/${rowId}`, record),
+
+  deleteSalesRecord: (rowId) =>
+    api.delete(`/v1/data/${rowId}`),
 
   loadData: (filePath = null, overwrite = false) =>
     api.post('/data/load', {

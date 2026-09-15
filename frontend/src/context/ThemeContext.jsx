@@ -2,120 +2,103 @@ import { createContext, useContext, useEffect, useState } from 'react'
 
 const ThemeContext = createContext(null)
 
-const THEMES = {
+const themes = {
   cobalt: {
     name: 'Bold Cobalt',
-    primary: '#2563eb',
-    primaryDark: '#1d4ed8',
-    primaryLight: '#dbeafe',
-    background: '#f8fafc',
+    primary: '#4f46e5',
+    primaryDark: '#3730a3',
+    secondary: '#7c3aed',
+    background: '#f6f8ff',
     surface: '#ffffff',
-    surfaceAlt: '#f1f5f9',
-    text: '#0f172a',
-    textMuted: '#64748b',
+    text: '#111827',
+    muted: '#64748b',
     border: '#e2e8f0',
   },
 
-  dark: {
-    name: 'Dark Cobalt',
-    primary: '#3b82f6',
-    primaryDark: '#2563eb',
-    primaryLight: '#1e3a8a',
-    background: '#0f172a',
-    surface: '#1e293b',
-    surfaceAlt: '#334155',
-    text: '#f8fafc',
-    textMuted: '#94a3b8',
-    border: '#334155',
+  violet: {
+    name: 'Modern Violet',
+    primary: '#7c3aed',
+    primaryDark: '#5b21b6',
+    secondary: '#a855f7',
+    background: '#faf7ff',
+    surface: '#ffffff',
+    text: '#18181b',
+    muted: '#71717a',
+    border: '#e4e4e7',
+  },
+
+  blue: {
+    name: 'Ocean Blue',
+    primary: '#2563eb',
+    primaryDark: '#1d4ed8',
+    secondary: '#06b6d4',
+    background: '#f4f8ff',
+    surface: '#ffffff',
+    text: '#0f172a',
+    muted: '#64748b',
+    border: '#dbeafe',
   },
 }
 
 export function ThemeProvider({ children }) {
-  const [mode, setMode] = useState(() => {
-    return localStorage.getItem('metricmind_theme_mode') || 'light'
+  const [dark, setDark] = useState(() => {
+    return localStorage.getItem('metricmind_dark') === 'true'
   })
 
   const [themeName, setThemeName] = useState(() => {
-    return localStorage.getItem('metricmind_theme_name') || 'cobalt'
+    return localStorage.getItem('metricmind_theme') || 'cobalt'
   })
 
-  const isDark = mode === 'dark'
-  const theme = isDark ? THEMES.dark : THEMES[themeName] || THEMES.cobalt
+  const theme = themes[themeName] || themes.cobalt
 
   useEffect(() => {
-    localStorage.setItem('metricmind_theme_mode', mode)
-    localStorage.setItem('metricmind_theme_name', themeName)
+    localStorage.setItem('metricmind_dark', String(dark))
+    localStorage.setItem('metricmind_theme', themeName)
 
-    document.documentElement.setAttribute(
-      'data-theme',
-      isDark ? 'dark' : themeName
-    )
+    const root = document.documentElement
 
-    document.documentElement.style.setProperty(
-      '--color-primary',
-      theme.primary
-    )
+    root.style.setProperty('--primary', theme.primary)
+    root.style.setProperty('--primary-dark', theme.primaryDark)
+    root.style.setProperty('--secondary', theme.secondary)
 
-    document.documentElement.style.setProperty(
-      '--color-primary-dark',
-      theme.primaryDark
-    )
+    if (dark) {
+      root.style.setProperty('--background', '#0b1020')
+      root.style.setProperty('--surface', '#111827')
+      root.style.setProperty('--surface-2', '#182235')
+      root.style.setProperty('--text', '#f8fafc')
+      root.style.setProperty('--muted', '#94a3b8')
+      root.style.setProperty('--border', '#273449')
+      root.classList.add('dark')
+    } else {
+      root.style.setProperty('--background', theme.background)
+      root.style.setProperty('--surface', theme.surface)
+      root.style.setProperty('--surface-2', '#f8fafc')
+      root.style.setProperty('--text', theme.text)
+      root.style.setProperty('--muted', theme.muted)
+      root.style.setProperty('--border', theme.border)
+      root.classList.remove('dark')
+    }
+  }, [dark, themeName, theme])
 
-    document.documentElement.style.setProperty(
-      '--color-primary-light',
-      theme.primaryLight
-    )
-
-    document.documentElement.style.setProperty(
-      '--color-background',
-      theme.background
-    )
-
-    document.documentElement.style.setProperty(
-      '--color-surface',
-      theme.surface
-    )
-
-    document.documentElement.style.setProperty(
-      '--color-surface-alt',
-      theme.surfaceAlt
-    )
-
-    document.documentElement.style.setProperty(
-      '--color-text',
-      theme.text
-    )
-
-    document.documentElement.style.setProperty(
-      '--color-text-muted',
-      theme.textMuted
-    )
-
-    document.documentElement.style.setProperty(
-      '--color-border',
-      theme.border
-    )
-  }, [mode, themeName, isDark, theme])
-
-  const toggleTheme = () => {
-    setMode((current) => (current === 'dark' ? 'light' : 'dark'))
+  const toggleDarkMode = () => {
+    setDark((value) => !value)
   }
 
-  const setCobaltTheme = () => {
-    setThemeName('cobalt')
-    setMode('light')
+  const changeTheme = (name) => {
+    if (themes[name]) {
+      setThemeName(name)
+    }
   }
 
   return (
     <ThemeContext.Provider
       value={{
-        mode,
+        dark,
         themeName,
         theme,
-        isDark,
-        toggleTheme,
-        setThemeName,
-        setCobaltTheme,
+        themes,
+        toggleDarkMode,
+        changeTheme,
       }}
     >
       {children}
@@ -132,5 +115,3 @@ export function useTheme() {
 
   return context
 }
-
-export { ThemeContext }

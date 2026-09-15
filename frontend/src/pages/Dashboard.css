@@ -1,559 +1,418 @@
 .dashboard-page {
-    min-height: 100vh;
-    padding: 32px;
-    background: #f6f8fc;
-    color: #111827;
-    box-sizing: border-box;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.dashboard-header {
+  min-height: 86px;
+  padding: 18px 5%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.metric-logo {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.metric-logo-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: linear-gradient(
+    135deg,
+    #3155ff,
+    #7c3aed
+  );
+  box-shadow: 0 12px 30px rgba(49, 85, 255, 0.25);
+}
+
+.metric-logo strong {
+  display: block;
+  font-size: 23px;
+  letter-spacing: -0.8px;
+}
+
+.metric-logo span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1.3px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.api-status,
+.refresh-button,
+.icon-button,
+.upload-button {
+  height: 44px;
+  border-radius: 13px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 15px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.api-status span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.api-status.online span {
+  background: #16a34a;
+}
+
+.api-status.offline span {
+  background: #dc2626;
+}
+
+.upload-button,
+.copilot-button {
+  color: white;
+  background: linear-gradient(
+    135deg,
+    #3155ff,
+    #6741e8
+  );
+  border: none;
+}
+
+.icon-button {
+  width: 44px;
+  padding: 0;
+}
+
+.refresh-button:hover,
+.icon-button:hover {
+  background: var(--surface-2);
+}
+
+.upload-button:hover,
+.copilot-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(49, 85, 255, 0.25);
+}
+
+.dashboard-main {
+  width: min(1400px, 90%);
+  margin: 0 auto;
+  padding: 55px 0 70px;
+}
+
+.hero-section {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 30px;
+  margin-bottom: 35px;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: #3155ff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.hero-section h1 {
+  margin: 0;
+  font-size: clamp(42px, 5vw, 70px);
+  line-height: 0.98;
+  letter-spacing: -3px;
+}
+
+.hero-section h1 span {
+  background: linear-gradient(
+    90deg,
+    #3155ff,
+    #7c3aed
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.hero-description {
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 15px;
+  border-radius: 100px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: #3155ff;
+  font-weight: 700;
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 17px 20px;
+  margin-bottom: 25px;
+  border-radius: 15px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.error-banner p {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  min-height: 175px;
+  padding: 25px;
+  border-radius: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  gap: 17px;
+  box-shadow: var(--shadow);
+}
+
+.kpi-icon {
+  width: 50px;
+  height: 50px;
+  flex: 0 0 50px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  color: #3155ff;
+  background: rgba(49, 85, 255, 0.1);
+}
+
+.kpi-content span {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.kpi-content strong {
+  display: block;
+  margin: 11px 0 8px;
+  font-size: 29px;
+  letter-spacing: -1px;
+}
+
+.kpi-content small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.copilot-card {
+  padding: 28px;
+  border-radius: 24px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border: 1px solid rgba(49, 85, 255, 0.2);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(49, 85, 255, 0.11),
+      rgba(124, 58, 237, 0.08)
+    );
+}
+
+.copilot-icon {
+  width: 60px;
+  height: 60px;
+  flex: 0 0 60px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: linear-gradient(
+    135deg,
+    #3155ff,
+    #7c3aed
+  );
+}
+
+.copilot-content {
+  flex: 1;
+}
+
+.copilot-content > span {
+  font-size: 11px;
+  color: #3155ff;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.copilot-content h2 {
+  margin: 6px 0;
+  font-size: 24px;
+}
+
+.copilot-content p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.copilot-button {
+  padding: 13px 18px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 22px;
+  margin-bottom: 22px;
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 25px;
+  box-shadow: var(--shadow);
+}
+
+.full-chart {
+  margin-top: 0;
+}
+
+.chart-header {
+  margin-bottom: 12px;
+}
+
+.chart-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #3155ff;
+}
+
+.chart-title h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 20px;
+}
+
+.chart-title p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chart-container {
+  width: 100%;
+  min-height: 330px;
+}
+
+.dashboard-footer {
+  width: min(1400px, 90%);
+  margin: 0 auto;
+  padding: 25px 0 35px;
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 13px;
+  border-top: 1px solid var(--border);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
-  
-  .dashboard-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 24px;
-    margin-bottom: 30px;
-  }
-  
-  .dashboard-brand {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-  }
-  
-  .dashboard-logo {
-    width: 64px;
-    height: 64px;
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    background: linear-gradient(135deg, #2563eb, #4f46e5);
-    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.25);
-  }
-  
-  .dashboard-brand h1 {
-    margin: 0;
-    font-size: 34px;
-    font-weight: 800;
-    letter-spacing: -1.2px;
-  }
-  
-  .dashboard-brand p {
-    margin: 4px 0 0;
-    color: #64748b;
-    font-size: 15px;
-  }
-  
-  .dashboard-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  
-  .api-status,
-  .refresh-button,
-  .icon-button {
-    height: 48px;
-    border-radius: 14px;
-    border: 1px solid #e2e8f0;
-    background: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .api-status {
-    padding: 0 17px;
-    gap: 9px;
-    font-weight: 700;
-  }
-  
-  .api-status span {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    display: block;
-  }
-  
-  .api-status.online span {
-    background: #16a34a;
-  }
-  
-  .api-status.offline span {
-    background: #ef4444;
-  }
-  
-  .icon-button {
-    width: 48px;
-    cursor: pointer;
-    color: #334155;
-  }
-  
-  .refresh-button {
-    padding: 0 18px;
-    gap: 8px;
-    cursor: pointer;
-    font-weight: 700;
-    color: #1e293b;
-  }
-  
-  .refresh-button:hover,
-  .icon-button:hover {
-    border-color: #2563eb;
-    color: #2563eb;
-  }
-  
-  .refresh-button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  
-  .spin {
-    animation: dashboard-spin 0.8s linear infinite;
-  }
-  
-  @keyframes dashboard-spin {
-    from {
-      transform: rotate(0deg);
-    }
-  
-    to {
-      transform: rotate(360deg);
-    }
-  }
-  
-  .dashboard-error {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 15px 18px;
-    margin-bottom: 22px;
-    border-radius: 14px;
-    background: #fff1f2;
-    border: 1px solid #fecdd3;
-    color: #be123c;
-    font-weight: 600;
-  }
-  
+}
+
+@media (max-width: 1100px) {
   .kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(2, 1fr);
   }
-  
-  .kpi-card {
-    min-height: 180px;
-    padding: 25px;
-    border-radius: 22px;
-    background: white;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
-    display: flex;
-    gap: 18px;
-    box-sizing: border-box;
-  }
-  
-  .kpi-icon {
-    width: 52px;
-    height: 52px;
-    min-width: 52px;
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #eef2ff;
-    color: #4f46e5;
-  }
-  
-  .kpi-content {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-  
-  .kpi-content > span {
-    color: #64748b;
-    font-size: 14px;
-    font-weight: 600;
-  }
-  
-  .kpi-content strong {
-    margin-top: 12px;
-    font-size: 30px;
-    color: #0f172a;
-    letter-spacing: -1px;
-  }
-  
-  .kpi-content small {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    margin-top: auto;
-    color: #16a34a;
-    font-size: 13px;
-    font-weight: 700;
-  }
-  
-  .copilot-banner {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 25px 30px;
-    margin-bottom: 30px;
-    border-radius: 24px;
-    border: 1px solid #c7d2fe;
-    background: linear-gradient(
-      135deg,
-      #eef2ff,
-      #f8fafc
-    );
-  }
-  
-  .copilot-icon {
-    width: 60px;
-    height: 60px;
-    min-width: 60px;
-    border-radius: 18px;
-    background: #4f46e5;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .copilot-text {
-    flex: 1;
-  }
-  
-  .copilot-text > span {
-    color: #4f46e5;
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 2px;
-  }
-  
-  .copilot-text h2 {
-    margin: 6px 0 3px;
-    font-size: 22px;
-  }
-  
-  .copilot-text p {
-    margin: 0;
-    color: #64748b;
-  }
-  
-  .copilot-button {
-    border: 0;
-    border-radius: 13px;
-    padding: 14px 20px;
-    background: #4f46e5;
-    color: white;
-    font-size: 14px;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-  }
-  
-  .copilot-button:hover {
-    background: #4338ca;
-  }
-  
-  .section-title {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 18px;
-  }
-  
-  .section-title span {
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 2px;
-    color: #4f46e5;
-  }
-  
-  .section-title h2 {
-    margin: 5px 0 0;
-    font-size: 26px;
-  }
-  
-  .section-title > svg {
-    color: #4f46e5;
-  }
-  
+
   .charts-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
+    grid-template-columns: 1fr;
   }
-  
-  .chart-card,
-  .products-card {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 22px;
-    padding: 24px;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
-  }
-  
-  .chart-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 25px;
-  }
-  
-  .chart-header > div {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  
-  .chart-header svg {
-    color: #4f46e5;
-  }
-  
-  .chart-header h3 {
-    margin: 0;
-    font-size: 19px;
-  }
-  
-  .empty-chart,
-  .empty-products {
-    min-height: 260px;
-    display: flex;
+}
+
+@media (max-width: 750px) {
+  .dashboard-header {
+    align-items: flex-start;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: #64748b;
   }
-  
-  .empty-chart svg,
-  .empty-products svg {
-    color: #94a3b8;
-    margin-bottom: 10px;
-  }
-  
-  .empty-chart strong,
-  .empty-products strong {
-    color: #334155;
-  }
-  
-  .empty-chart p,
-  .empty-products p {
-    max-width: 330px;
-    line-height: 1.5;
-  }
-  
-  .bar-list {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-  
-  .bar-row {
+
+  .header-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
-  
-  .bar-label {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 8px;
-    font-size: 13px;
-  }
-  
-  .bar-label span {
-    color: #475569;
-  }
-  
-  .bar-label b {
-    color: #0f172a;
-  }
-  
-  .bar-track {
-    width: 100%;
-    height: 10px;
-    border-radius: 20px;
-    background: #e2e8f0;
-    overflow: hidden;
-  }
-  
-  .bar-fill {
-    height: 100%;
-    border-radius: 20px;
-    background: linear-gradient(
-      90deg,
-      #2563eb,
-      #4f46e5
-    );
-    transition: width 0.5s ease;
-  }
-  
-  .bar-fill.secondary {
-    background: linear-gradient(
-      90deg,
-      #4f46e5,
-      #7c3aed
-    );
-  }
-  
-  .products-card {
-    margin-top: 24px;
-  }
-  
-  .product-list {
-    display: flex;
+
+  .hero-section {
+    align-items: flex-start;
     flex-direction: column;
   }
-  
-  .product-row {
-    display: grid;
-    grid-template-columns: 45px 1fr auto;
-    gap: 15px;
-    align-items: center;
-    padding: 14px 0;
-    border-bottom: 1px solid #f1f5f9;
+
+  .hero-section h1 {
+    font-size: 45px;
   }
-  
-  .product-row:last-child {
-    border-bottom: 0;
+
+  .kpi-grid {
+    grid-template-columns: 1fr;
   }
-  
-  .product-rank {
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #eef2ff;
-    color: #4f46e5;
-    font-weight: 800;
+
+  .copilot-card {
+    align-items: flex-start;
+    flex-direction: column;
   }
-  
-  .product-name {
-    color: #334155;
-    font-weight: 600;
+
+  .dashboard-footer {
+    flex-direction: column;
+    gap: 8px;
   }
-  
-  .product-row strong {
-    color: #0f172a;
-  }
-  
-  body.metricmind-dark {
-    background: #0b1120;
-  }
-  
-  body.metricmind-dark .dashboard-page {
-    background: #0b1120;
-    color: #f8fafc;
-  }
-  
-  body.metricmind-dark .dashboard-brand p,
-  body.metricmind-dark .copilot-text p {
-    color: #94a3b8;
-  }
-  
-  body.metricmind-dark .kpi-card,
-  body.metricmind-dark .chart-card,
-  body.metricmind-dark .products-card,
-  body.metricmind-dark .api-status,
-  body.metricmind-dark .refresh-button,
-  body.metricmind-dark .icon-button {
-    background: #111827;
-    border-color: #1e293b;
-  }
-  
-  body.metricmind-dark .kpi-content strong,
-  body.metricmind-dark .chart-header h3,
-  body.metricmind-dark .product-row strong,
-  body.metricmind-dark .bar-label b {
-    color: #f8fafc;
-  }
-  
-  body.metricmind-dark .kpi-content > span,
-  body.metricmind-dark .bar-label span,
-  body.metricmind-dark .product-name {
-    color: #94a3b8;
-  }
-  
-  body.metricmind-dark .copilot-banner {
-    background: linear-gradient(
-      135deg,
-      #11183a,
-      #111827
-    );
-    border-color: #312e81;
-  }
-  
-  body.metricmind-dark .bar-track {
-    background: #1e293b;
-  }
-  
-  body.metricmind-dark .product-row {
-    border-color: #1e293b;
-  }
-  
-  body.metricmind-dark .copilot-text h2,
-  body.metricmind-dark .section-title h2 {
-    color: #f8fafc;
-  }
-  
-  body.metricmind-dark .empty-chart strong,
-  body.metricmind-dark .empty-products strong {
-    color: #e2e8f0;
-  }
-  
-  @media (max-width: 1100px) {
-    .kpi-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  
-    .charts-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-  
-  @media (max-width: 750px) {
-    .dashboard-page {
-      padding: 18px;
-    }
-  
-    .dashboard-header {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-  
-    .dashboard-actions {
-      width: 100%;
-      flex-wrap: wrap;
-    }
-  
-    .api-status {
-      flex: 1;
-    }
-  
-    .kpi-grid {
-      grid-template-columns: 1fr;
-    }
-  
-    .copilot-banner {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-  
-    .copilot-button {
-      width: 100%;
-      justify-content: center;
-    }
-  
-    .dashboard-brand h1 {
-      font-size: 28px;
-    }
-  }
+}

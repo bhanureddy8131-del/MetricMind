@@ -1,12 +1,22 @@
 import { useState } from 'react'
-import { ArrowRight, BrainCircuit, Eye, EyeOff, ShieldCheck } from 'lucide-react'
+import {
+  ArrowRight,
+  BrainCircuit,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  BarChart3,
+  Sparkles,
+  CheckCircle2,
+} from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
+import './Login.css'
 
 export default function Login() {
   const [email, setEmail] = useState('demo@metricmind.com')
   const [password, setPassword] = useState('demo1234')
-  const [show, setShow] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -16,203 +26,310 @@ export default function Login() {
   const submit = async (event) => {
     event.preventDefault()
 
-    setError('')
-
-    if (!email.trim()) {
-      setError('Please enter your email address.')
-      return
-    }
-
-    if (!password) {
-      setError('Please enter your password.')
+    if (!email.trim() || !password) {
+      setError('Please enter your email and password.')
       return
     }
 
     setLoading(true)
+    setError('')
 
     try {
-      const result = await login(email.trim(), password)
+      const result = await login(email, password)
 
-      if (result && result.success) {
-        navigate('/')
-        return
-      }
-
-      if (result && result.error) {
-        setError(result.error)
+      if (result.success) {
+        navigate('/', { replace: true })
       } else {
-        setError('Invalid email or password.')
+        setError(result.error || 'Invalid email or password.')
       }
     } catch (err) {
-      console.error('Login error:', err)
-      setError('Unable to login. Please check that the backend is running.')
+      console.error(err)
+      setError('Unable to sign in. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <main className="auth-page">
-      <div className="auth-art">
-        <div className="auth-art-inner">
+    <main className="login-page">
 
-          <div className="brand auth-brand">
-            <div className="brand-mark">
-              <BrainCircuit size={20} />
+      {/* LEFT BRAND PANEL */}
+      <section className="login-visual">
+
+        <div className="visual-glow glow-one" />
+        <div className="visual-glow glow-two" />
+
+        <div className="visual-content">
+
+          {/* LOGO */}
+          <Link to="/" className="login-logo">
+            <div className="logo-emblem">
+              <BrainCircuit size={30} strokeWidth={2.2} />
             </div>
 
-            <span>
-              Metric<span>Mind</span>
-            </span>
-          </div>
+            <div>
+              <strong>Metric</strong>
+              <span>Mind</span>
+            </div>
+          </Link>
 
-          <div className="art-copy">
-            <p className="eyebrow">
+          {/* MAIN MESSAGE */}
+          <div className="visual-message">
+            <div className="small-label">
+              <Sparkles size={15} />
               AI-POWERED BUSINESS INTELLIGENCE
-            </p>
+            </div>
 
             <h1>
-              Find the signal
+              Turn your data
               <br />
-              <em>inside your data.</em>
+              into <em>better decisions.</em>
             </h1>
 
             <p>
-              Ask sharper questions. Make decisions with evidence.
+              Ask questions about your business data,
+              discover hidden patterns and make confident
+              decisions with MetricMind.
             </p>
           </div>
 
-          <div className="signal-card">
-            <ShieldCheck size={18} />
+          {/* MINI ANALYTICS CARD */}
+          <div className="analytics-preview">
 
-            <span>
-              Private workspace analytics
-            </span>
+            <div className="preview-header">
+              <div>
+                <span>REVENUE OVERVIEW</span>
+                <strong>$284,392</strong>
+              </div>
 
-            <b>
-              Live
-            </b>
+              <div className="preview-icon">
+                <BarChart3 size={20} />
+              </div>
+            </div>
+
+            <div className="fake-chart">
+              <div className="chart-line line-one" />
+              <div className="chart-line line-two" />
+              <div className="chart-line line-three" />
+              <div className="chart-line line-four" />
+              <div className="chart-line line-five" />
+            </div>
+
+            <div className="preview-footer">
+              <span>↗ 18.6% this month</span>
+              <span>Live analytics</span>
+            </div>
+
+          </div>
+
+          {/* FEATURES */}
+          <div className="feature-list">
+
+            <div>
+              <CheckCircle2 size={17} />
+              <span>Real-time business analytics</span>
+            </div>
+
+            <div>
+              <CheckCircle2 size={17} />
+              <span>Natural language data queries</span>
+            </div>
+
+            <div>
+              <CheckCircle2 size={17} />
+              <span>Secure private workspace</span>
+            </div>
+
           </div>
 
         </div>
-      </div>
+      </section>
 
-      <div className="auth-form-wrap">
-        <form
-          className="auth-form"
-          onSubmit={submit}
-        >
+      {/* RIGHT LOGIN PANEL */}
+      <section className="login-panel">
 
-          <p className="eyebrow">
-            WELCOME BACK
-          </p>
+        <div className="login-card">
 
-          <h2>
-            Sign in to your workspace
-          </h2>
+          <div className="mobile-logo">
+            <div className="logo-emblem">
+              <BrainCircuit size={24} />
+            </div>
+            <strong>
+              Metric<span>Mind</span>
+            </strong>
+          </div>
 
-          <p className="muted">
-            Your next clear decision starts here.
+          <div className="login-heading">
+            <div className="welcome-icon">
+              <ShieldCheck size={21} />
+            </div>
+
+            <div>
+              <p className="login-eyebrow">WELCOME BACK</p>
+              <h2>Sign in to MetricMind</h2>
+            </div>
+          </div>
+
+          <p className="login-description">
+            Continue to your analytics workspace and
+            keep turning data into decisions.
           </p>
 
           {error && (
-            <div className="error-box">
-              {error}
+            <div className="login-error">
+              <span>!</span>
+              <div>
+                <strong>Sign in unsuccessful</strong>
+                <p>{error}</p>
+              </div>
             </div>
           )}
 
-          <label htmlFor="login-email">
-            Email address
+          <form onSubmit={submit}>
 
-            <input
-              id="login-email"
-              name="email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@company.com"
-              autoComplete="email"
-              disabled={loading}
-            />
-          </label>
+            {/* EMAIL */}
+            <div className="field">
 
-          <label htmlFor="login-password">
-            Password
+              <label htmlFor="email">
+                Email address
+              </label>
 
-            <div className="password-input">
               <input
-                id="login-password"
-                name="password"
-                type={show ? 'text' : 'password'}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Enter your password"
-                autoComplete="current-password"
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) =>
+                  setEmail(event.target.value)
+                }
+                placeholder="you@company.com"
                 disabled={loading}
               />
 
-              <button
-                type="button"
-                onClick={() => setShow(!show)}
-                disabled={loading}
-                aria-label={
-                  show
-                    ? 'Hide password'
-                    : 'Show password'
-                }
-              >
-                {show ? (
-                  <EyeOff size={17} />
-                ) : (
-                  <Eye size={17} />
-                )}
-              </button>
             </div>
-          </label>
 
-          <div className="form-row">
+            {/* PASSWORD */}
+            <div className="field">
 
-            <label className="checkbox">
+              <div className="password-label-row">
+                <label htmlFor="password">
+                  Password
+                </label>
+
+                <a href="#forgot">
+                  Forgot password?
+                </a>
+              </div>
+
+              <div className="password-wrapper">
+
+                <input
+                  id="password"
+                  name="password"
+                  type={
+                    showPassword
+                      ? 'text'
+                      : 'password'
+                  }
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) =>
+                    setPassword(event.target.value)
+                  }
+                  placeholder="Enter your password"
+                  disabled={loading}
+                />
+
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() =>
+                    setShowPassword(!showPassword)
+                  }
+                  disabled={loading}
+                  aria-label={
+                    showPassword
+                      ? 'Hide password'
+                      : 'Show password'
+                  }
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} />
+                  ) : (
+                    <Eye size={18} />
+                  )}
+                </button>
+
+              </div>
+            </div>
+
+            {/* REMEMBER */}
+            <label className="remember-row">
+
               <input
                 type="checkbox"
                 name="remember"
                 disabled={loading}
               />
 
-              Remember me
+              <span>Remember me on this device</span>
+
             </label>
 
-            <a href="#forgot">
-              Forgot password?
-            </a>
+            {/* SUBMIT */}
+            <button
+              type="submit"
+              className="login-button"
+              disabled={loading}
+            >
 
+              {loading ? (
+                <>
+                  <span className="spinner" />
+                  Signing in...
+                </>
+              ) : (
+                <>
+                  Sign in to workspace
+                  <ArrowRight size={18} />
+                </>
+              )}
+
+            </button>
+
+          </form>
+
+          {/* DIVIDER */}
+          <div className="login-divider">
+            <span>NEW TO METRICMIND?</span>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="primary-button"
+          {/* REGISTER */}
+          <Link
+            to="/register"
+            className="create-account"
           >
-            {loading ? (
-              'Signing in...'
-            ) : (
-              <>
-                Sign in to MetricMind
-                <ArrowRight size={17} />
-              </>
-            )}
-          </button>
+            Create your account
+            <ArrowRight size={17} />
+          </Link>
 
-          <p className="auth-footer">
-            Don't have an account?{' '}
+          {/* SECURITY */}
+          <div className="security-note">
+            <ShieldCheck size={16} />
+            <span>
+              Your workspace data is protected and private.
+            </span>
+          </div>
 
-            <Link to="/register">
-              Create one now
-            </Link>
-          </p>
+        </div>
 
-        </form>
-      </div>
+        <p className="login-copyright">
+          © 2026 MetricMind · AI-powered analytics
+        </p>
+
+      </section>
+
     </main>
   )
 }
