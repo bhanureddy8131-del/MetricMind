@@ -8,26 +8,15 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-
 from jose import JWTError, jwt
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-)
-
-from fastapi.security import (
-    HTTPBearer,
-    HTTPAuthorizationCredentials,
-)
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-
 from app.models import User
-
 from app.schemas import (
     QueryRequest,
     QueryResponse,
@@ -38,13 +27,10 @@ from app.schemas import (
     DimensionInfo,
     RegisterRequest,
     LoginRequest,
-    UserResponse,
     TokenResponse,
     MeResponse,
 )
-
 from app.semantic_layer.loader import semantic_layer
-
 from app.services.query_service import QueryService
 
 
@@ -57,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api",
-    tags=["api"]
+    tags=["api"],
 )
 
 
@@ -67,7 +53,7 @@ router = APIRouter(
 
 auth_router = APIRouter(
     prefix="/v1/auth",
-    tags=["authentication"]
+    tags=["authentication"],
 )
 
 
@@ -77,7 +63,7 @@ auth_router = APIRouter(
 
 SECRET_KEY = os.getenv(
     "JWT_SECRET_KEY",
-    "metricmind-development-secret-change-this"
+    "metricmind-development-secret-change-this",
 )
 
 ALGORITHM = "HS256"
@@ -85,9 +71,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 
-security = HTTPBearer(
-    auto_error=False
-)
+security = HTTPBearer(auto_error=False)
 
 
 # ============================================================
@@ -101,7 +85,7 @@ def hash_password(password: str) -> str:
 
     hashed = bcrypt.hashpw(
         password_bytes,
-        bcrypt.gensalt()
+        bcrypt.gensalt(),
     )
 
     return hashed.decode("utf-8")
@@ -109,16 +93,15 @@ def hash_password(password: str) -> str:
 
 def verify_password(
     plain_password: str,
-    hashed_password: str
+    hashed_password: str,
 ) -> bool:
     """Verify password."""
 
     try:
         return bcrypt.checkpw(
             plain_password.encode("utf-8"),
-            hashed_password.encode("utf-8")
+            hashed_password.encode("utf-8"),
         )
-
     except Exception:
         return False
 
@@ -127,9 +110,7 @@ def verify_password(
 # JWT TOKEN
 # ============================================================
 
-def create_access_token(
-    user_id: int
-) -> str:
+def create_access_token(user_id: int) -> str:
     """Create JWT access token."""
 
     expire = (
@@ -147,7 +128,7 @@ def create_access_token(
     token = jwt.encode(
         payload,
         SECRET_KEY,
-        algorithm=ALGORITHM
+        algorithm=ALGORITHM,
     )
 
     return token
@@ -157,9 +138,7 @@ def create_access_token(
 # USER RESPONSE
 # ============================================================
 
-def user_to_response(
-    user: User
-) -> dict:
+def user_to_response(user: User) -> dict:
     """Convert User database object to API response."""
 
     return {
@@ -181,62 +160,127 @@ def get_current_user(
     ),
     db: Session = Depends(get_db),
 ):
-    """Get logged-in user from JWT token."""
+    """
+    Get logged-in user from JWT token.
+    """
+
+    # --------------------------------------------------------
+    # Check Authorization header
+    # --------------------------------------------------------
 
     if credentials is None:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required"
+        logger.warning(
+            "Authentication failed: Authorization header missing"
         )
 
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required",
+        )
+
+    # --------------------------------------------------------
+    # Get token
+    # --------------------------------------------------------
+
     token = credentials.credentials
+
+    if not token:
+        logger.warning(
+            "Authentication failed: empty token"
+        )
+
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication token missing",
+        )
+
+    # --------------------------------------------------------
+    # Decode JWT
+    # --------------------------------------------------------
 
     try:
         payload = jwt.decode(
             token,
             SECRET_KEY,
-            algorithms=[ALGORITHM]
+            algorithms=[ALGORITHM],
         )
 
-        user_id = payload.get("sub")
-
-        if not user_id:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid authentication token"
-            )
-
-        user = (
-            db.query(User)
-            .filter(User.id == int(user_id))
-            .first()
+    except JWTError as exc:
+        logger.warning(
+            f"Authentication failed: JWT error: {exc}"
         )
 
-        if user is None:
-            raise HTTPException(
-                status_code=401,
-                detail="User not found"
-            )
-
-        if not user.is_active:
-            raise HTTPException(
-                status_code=403,
-                detail="User account is inactive"
-            )
-
-        return user
-
-    except JWTError:
         raise HTTPException(
             status_code=401,
-            detail="Invalid or expired authentication token"
+            detail="Invalid or expired authentication token",
         )
 
-    except ValueError:
+    # --------------------------------------------------------
+    # Get user ID
+    # --------------------------------------------------------
+
+    user_id = payload.get("sub")
+
+    if not user_id:
+        logger.warning(
+            "Authentication failed: JWT has no user ID"
+        )
+
         raise HTTPException(
             status_code=401,
-            detail="Invalid authentication token"
+            detail="Invalid authentication token",
         )
+
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+
+        logger.warning(
+            "Authentication failed: invalid user ID"
+        )
+
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authentication token",
+        )
+
+    # --------------------------------------------------------
+    # Find user
+    # --------------------------------------------------------
+
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
+
+    if user is None:
+
+        logger.warning(
+            f"Authentication failed: user {user_id} not found"
+        )
+
+        raise HTTPException(
+            status_code=401,
+            detail="User not found",
+        )
+
+    # --------------------------------------------------------
+    # Check active account
+    # --------------------------------------------------------
+
+    if not user.is_active:
+
+        logger.warning(
+            f"Authentication failed: user {user_id} inactive"
+        )
+
+        raise HTTPException(
+            status_code=403,
+            detail="User account is inactive",
+        )
+
+    return user
 
 
 # ============================================================
@@ -245,14 +289,13 @@ def get_current_user(
 
 @router.get(
     "/health",
-    response_model=HealthResponse
+    response_model=HealthResponse,
 )
 def health_check():
-    """Check if backend is running."""
 
     return {
         "status": "healthy",
-        "message": "MetricMind backend is running"
+        "message": "MetricMind backend is running",
     }
 
 
@@ -262,10 +305,9 @@ def health_check():
 
 @router.get(
     "/metrics",
-    response_model=MetricsListResponse
+    response_model=MetricsListResponse,
 )
 def list_metrics():
-    """Get all available metrics."""
 
     try:
 
@@ -276,15 +318,15 @@ def list_metrics():
                 name=m["name"],
                 display_name=m.get(
                     "display_name",
-                    m["name"]
+                    m["name"],
                 ),
                 description=m.get(
                     "description",
-                    ""
+                    "",
                 ),
                 sql_expression=m.get(
                     "sql_expression",
-                    ""
+                    "",
                 ),
             )
             for m in metrics
@@ -292,7 +334,7 @@ def list_metrics():
 
         return {
             "metrics": metrics_info,
-            "count": len(metrics_info)
+            "count": len(metrics_info),
         }
 
     except Exception as e:
@@ -303,7 +345,7 @@ def list_metrics():
 
         raise HTTPException(
             status_code=500,
-            detail="Error retrieving metrics"
+            detail="Error retrieving metrics",
         )
 
 
@@ -313,31 +355,28 @@ def list_metrics():
 
 @router.get(
     "/dimensions",
-    response_model=DimensionsListResponse
+    response_model=DimensionsListResponse,
 )
 def list_dimensions():
-    """Get all available dimensions."""
 
     try:
 
-        dimensions = (
-            semantic_layer.list_dimensions()
-        )
+        dimensions = semantic_layer.list_dimensions()
 
         dimensions_info = [
             DimensionInfo(
                 name=d["name"],
                 display_name=d.get(
                     "display_name",
-                    d["name"]
+                    d["name"],
                 ),
                 description=d.get(
                     "description",
-                    ""
+                    "",
                 ),
                 column_name=d.get(
                     "column_name",
-                    ""
+                    "",
                 ),
             )
             for d in dimensions
@@ -345,7 +384,7 @@ def list_dimensions():
 
         return {
             "dimensions": dimensions_info,
-            "count": len(dimensions_info)
+            "count": len(dimensions_info),
         }
 
     except Exception as e:
@@ -356,7 +395,7 @@ def list_dimensions():
 
         raise HTTPException(
             status_code=500,
-            detail="Error retrieving dimensions"
+            detail="Error retrieving dimensions",
         )
 
 
@@ -366,13 +405,12 @@ def list_dimensions():
 
 @router.post(
     "/query",
-    response_model=QueryResponse
+    response_model=QueryResponse,
 )
 def query(
     request: QueryRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Process natural language business question."""
 
     try:
 
@@ -382,7 +420,7 @@ def query(
 
             raise HTTPException(
                 status_code=400,
-                detail="Question cannot be empty"
+                detail="Question cannot be empty",
             )
 
         if len(question) > 1000:
@@ -392,53 +430,41 @@ def query(
                 detail=(
                     "Question is too long "
                     "(max 1000 characters)"
-                )
+                ),
             )
 
         logger.info(
             f"Processing query: {question}"
         )
 
-        result = (
-            QueryService.process_question(
-                question,
-                db
-            )
+        result = QueryService.process_question(
+            question,
+            db,
         )
 
         if "error" in result:
 
             error_detail = result.get(
                 "details",
-                result["error"]
+                result["error"],
             )
 
             raise HTTPException(
                 status_code=400,
-                detail=error_detail
+                detail=error_detail,
             )
 
-        response = QueryResponse(
+        return QueryResponse(
             question=result["question"],
             answer=result["answer"],
             sql=result["sql"],
-            metrics_used=result[
-                "metrics_used"
-            ],
-            dimensions_used=result[
-                "dimensions_used"
-            ],
+            metrics_used=result["metrics_used"],
+            dimensions_used=result["dimensions_used"],
             data=result["data"],
             chart=result["chart"],
-            execution_time_ms=result[
-                "execution_time_ms"
-            ],
-            row_count=result[
-                "row_count"
-            ],
+            execution_time_ms=result["execution_time_ms"],
+            row_count=result["row_count"],
         )
-
-        return response
 
     except HTTPException:
         raise
@@ -447,12 +473,12 @@ def query(
 
         logger.error(
             f"Error processing query: {e}",
-            exc_info=True
+            exc_info=True,
         )
 
         raise HTTPException(
             status_code=500,
-            detail="Internal server error"
+            detail="Internal server error",
         )
 
 
@@ -463,13 +489,12 @@ def query(
 @auth_router.post(
     "/register",
     response_model=TokenResponse,
-    status_code=201
+    status_code=201,
 )
 def register(
     request: RegisterRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Register a new user."""
 
     full_name = request.full_name.strip()
 
@@ -485,20 +510,12 @@ def register(
         .lower()
     )
 
-    # --------------------------------------------------------
-    # Validate name
-    # --------------------------------------------------------
-
     if len(full_name) < 2:
 
         raise HTTPException(
             status_code=400,
-            detail="Full name is too short"
+            detail="Full name is too short",
         )
-
-    # --------------------------------------------------------
-    # Check email
-    # --------------------------------------------------------
 
     existing_email = (
         db.query(User)
@@ -510,12 +527,8 @@ def register(
 
         raise HTTPException(
             status_code=400,
-            detail="Email already registered"
+            detail="Email already registered",
         )
-
-    # --------------------------------------------------------
-    # Check username
-    # --------------------------------------------------------
 
     existing_username = (
         db.query(User)
@@ -527,12 +540,8 @@ def register(
 
         raise HTTPException(
             status_code=400,
-            detail="Username already taken"
+            detail="Username already taken",
         )
-
-    # --------------------------------------------------------
-    # Create user
-    # --------------------------------------------------------
 
     new_user = User(
         full_name=full_name,
@@ -545,14 +554,8 @@ def register(
     )
 
     db.add(new_user)
-
     db.commit()
-
     db.refresh(new_user)
-
-    # --------------------------------------------------------
-    # Create login token
-    # --------------------------------------------------------
 
     access_token = create_access_token(
         new_user.id
@@ -573,23 +576,18 @@ def register(
 
 @auth_router.post(
     "/login",
-    response_model=TokenResponse
+    response_model=TokenResponse,
 )
 def login(
     request: LoginRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Login using email and password."""
 
     email = (
         request.email
         .strip()
         .lower()
     )
-
-    # --------------------------------------------------------
-    # Find user
-    # --------------------------------------------------------
 
     user = (
         db.query(User)
@@ -601,48 +599,38 @@ def login(
 
         raise HTTPException(
             status_code=401,
-            detail="Invalid email or password"
+            detail="Invalid email or password",
         )
-
-    # --------------------------------------------------------
-    # Verify password
-    # --------------------------------------------------------
 
     if not verify_password(
         request.password,
-        user.hashed_password
+        user.hashed_password,
     ):
 
         raise HTTPException(
             status_code=401,
-            detail="Invalid email or password"
+            detail="Invalid email or password",
         )
-
-    # --------------------------------------------------------
-    # Check active account
-    # --------------------------------------------------------
 
     if not user.is_active:
 
         raise HTTPException(
             status_code=403,
-            detail="User account is inactive"
+            detail="User account is inactive",
         )
-
-    # --------------------------------------------------------
-    # Create token
-    # --------------------------------------------------------
 
     access_token = create_access_token(
         user.id
     )
 
+    logger.info(
+        f"User logged in successfully: {user.email}"
+    )
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": user_to_response(
-            user
-        ),
+        "user": user_to_response(user),
     }
 
 
@@ -652,14 +640,13 @@ def login(
 
 @auth_router.get(
     "/me",
-    response_model=MeResponse
+    response_model=MeResponse,
 )
 def get_me(
     current_user: User = Depends(
         get_current_user
-    )
+    ),
 ):
-    """Get currently logged-in user."""
 
     return {
         "user": user_to_response(
@@ -672,16 +659,8 @@ def get_me(
 # LOGOUT
 # ============================================================
 
-@auth_router.post(
-    "/logout"
-)
+@auth_router.post("/logout")
 def logout():
-    """
-    Logout endpoint.
-
-    The actual JWT token is removed
-    by the frontend.
-    """
 
     return {
         "message": "Logged out successfully"
@@ -689,12 +668,15 @@ def logout():
 
 
 # ============================================================
-# ADD AUTH ROUTES TO MAIN ROUTER
+# ADD AUTH ROUTES
 # ============================================================
 
-router.include_router(
-    auth_router
-)
+router.include_router(auth_router)
+
+
+# ============================================================
+# DATASET ROUTES
+# ============================================================
 
 from app.api.datasets import router as dataset_router
 
