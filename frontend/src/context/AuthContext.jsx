@@ -17,8 +17,9 @@ export function AuthProvider({ children }) {
   )
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      const savedToken = localStorage.getItem('metricmind_token')
+    async function initializeAuth() {
+      const savedToken =
+        localStorage.getItem('metricmind_token')
 
       if (!savedToken) {
         setLoading(false)
@@ -35,12 +36,25 @@ export function AuthProvider({ children }) {
           }
         )
 
-        setUser(response.data)
+        const userData =
+          response.data?.user ||
+          response.data
+
+        setUser(userData)
         setToken(savedToken)
       } catch (error) {
-        console.log('Saved session is invalid.')
+        console.log(
+          'Saved MetricMind session is invalid.'
+        )
 
-        localStorage.removeItem('metricmind_token')
+        localStorage.removeItem(
+          'metricmind_token'
+        )
+
+        localStorage.removeItem(
+          'metricmind_user'
+        )
+
         setToken(null)
         setUser(null)
       } finally {
@@ -53,11 +67,6 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      console.log(
-        'Login request:',
-        `${API_BASE_URL}/v1/auth/login`
-      )
-
       const response = await axios.post(
         `${API_BASE_URL}/v1/auth/login`,
         {
@@ -66,21 +75,28 @@ export function AuthProvider({ children }) {
         }
       )
 
-      console.log('Login successful')
+      const accessToken =
+        response.data?.access_token
 
-      const accessToken = response.data.access_token
-      const userData = response.data.user
+      const userData =
+        response.data?.user
 
       if (!accessToken) {
         return {
           success: false,
-          error: 'Backend did not return an access token.',
+          error:
+            'Backend did not return an access token.',
         }
       }
 
       localStorage.setItem(
         'metricmind_token',
         accessToken
+      )
+
+      localStorage.setItem(
+        'metricmind_user',
+        JSON.stringify(userData || {})
       )
 
       setToken(accessToken)
@@ -100,18 +116,11 @@ export function AuthProvider({ children }) {
         }
       }
 
-      if (error.response?.status === 404) {
-        return {
-          success: false,
-          error: 'Login API was not found. Check backend routes.',
-        }
-      }
-
       if (!error.response) {
         return {
           success: false,
           error:
-            'Cannot connect to backend. Make sure MetricMind API is running on port 8001.',
+            'Cannot connect to MetricMind backend. Make sure port 8001 is running.',
         }
       }
 
@@ -141,13 +150,21 @@ export function AuthProvider({ children }) {
         }
       )
 
-      const accessToken = response.data.access_token
-      const userData = response.data.user
+      const accessToken =
+        response.data?.access_token
+
+      const userData =
+        response.data?.user
 
       if (accessToken) {
         localStorage.setItem(
           'metricmind_token',
           accessToken
+        )
+
+        localStorage.setItem(
+          'metricmind_user',
+          JSON.stringify(userData || {})
         )
 
         setToken(accessToken)
@@ -159,7 +176,10 @@ export function AuthProvider({ children }) {
         user: userData,
       }
     } catch (error) {
-      console.error('Registration error:', error)
+      console.error(
+        'Registration error:',
+        error
+      )
 
       return {
         success: false,
@@ -172,7 +192,9 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     const currentToken =
-      localStorage.getItem('metricmind_token')
+      localStorage.getItem(
+        'metricmind_token'
+      )
 
     try {
       if (currentToken) {
@@ -181,34 +203,43 @@ export function AuthProvider({ children }) {
           {},
           {
             headers: {
-              Authorization: `Bearer ${currentToken}`,
+              Authorization:
+                `Bearer ${currentToken}`,
             },
           }
         )
       }
     } catch (error) {
-      console.log('Logout request completed with warning.')
+      console.log(
+        'Logout completed locally.'
+      )
     }
 
-    localStorage.removeItem('metricmind_token')
+    localStorage.removeItem(
+      'metricmind_token'
+    )
+
+    localStorage.removeItem(
+      'metricmind_user'
+    )
 
     setToken(null)
     setUser(null)
   }
 
-  const value = {
-    user,
-    token,
-    loading,
-    isAuthenticated: Boolean(token),
-    login,
-    register,
-    logout,
-    API_BASE_URL,
-  }
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        isAuthenticated: Boolean(token),
+        login,
+        register,
+        logout,
+        API_BASE_URL,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

@@ -1,4 +1,130 @@
-import { useState } from 'react'
-import { Check, LogOut, Moon, Server, Sun } from 'lucide-react'
-import { useAuth } from '../context/useAuth'
-export default function Settings() { const { user, logout } = useAuth(); const [dark, setDark] = useState(false); return <div className="page"><div className="page-heading"><div><p className="eyebrow">WORKSPACE</p><h1>Settings.</h1><p className="muted">Keep your workspace tuned to how you work.</p></div></div><div className="settings-grid"><section className="panel settings-section"><div className="panel-heading"><div><h3>Profile</h3><span>Your local workspace identity</span></div></div><label>Full name<input defaultValue={user?.name || ''} /></label><label>Email address<input defaultValue={user?.email || ''} disabled /></label><button className="secondary-button"><Check size={15} /> Changes saved locally</button></section><section className="panel settings-section"><div className="panel-heading"><div><h3>Appearance</h3><span>Choose your visual preference</span></div></div><div className="theme-options"><button className={!dark ? 'theme-option selected' : 'theme-option'} onClick={() => setDark(false)}><Sun size={18} /><span>Light</span></button><button className={dark ? 'theme-option selected' : 'theme-option'} onClick={() => setDark(true)}><Moon size={18} /><span>Dark</span></button></div><p className="muted small">Dark mode preference is ready for the next theme pass.</p></section><section className="panel settings-section"><div className="panel-heading"><div><h3>Backend connection</h3><span>Current API configuration</span></div><span className="status-pill success">Connected</span></div><div className="connection-line"><Server size={18} /><code>{import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'}</code></div><p className="muted small">Authentication is currently frontend-local. The backend has no auth endpoints.</p></section><section className="panel settings-section danger-zone"><div className="panel-heading"><div><h3>Session</h3><span>Leave this workspace</span></div></div><button className="danger-button" onClick={logout}><LogOut size={16} /> Log out</button></section></div></div> }
+import { Check, Moon, Sun } from 'lucide-react'
+import { useTheme } from '../context/ThemeContext'
+
+export default function Settings() {
+  const {
+    theme,
+    themes,
+    dark,
+    changeTheme,
+    toggleDarkMode,
+  } = useTheme()
+
+  return (
+    <div className="settings-page">
+
+      <div className="page-header">
+        <div>
+          <h1>Settings</h1>
+          <p>Customize your MetricMind experience.</p>
+        </div>
+      </div>
+
+      {/* APPEARANCE */}
+      <section className="settings-card">
+
+        <div className="settings-card-header">
+
+          <div className="settings-icon">
+            {dark ? (
+              <Moon size={22} />
+            ) : (
+              <Sun size={22} />
+            )}
+          </div>
+
+          <div>
+            <h2>Appearance</h2>
+
+            <p>
+              {dark
+                ? 'Dark mode is currently enabled.'
+                : 'Light mode is currently enabled.'}
+            </p>
+          </div>
+
+        </div>
+
+        <div className="dark-mode-row">
+
+          <div>
+            <strong>Dark Mode</strong>
+
+            <span>
+              {dark
+                ? 'Use the dark interface'
+                : 'Use the light interface'}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className={`dark-toggle ${dark ? 'active' : ''}`}
+            onClick={toggleDarkMode}
+            aria-label="Toggle dark mode"
+          >
+            <span className="dark-toggle-circle">
+              {dark ? (
+                <Moon size={15} />
+              ) : (
+                <Sun size={15} />
+              )}
+            </span>
+          </button>
+
+        </div>
+
+      </section>
+
+      {/* COLOR THEME */}
+      <section className="settings-card">
+
+        <div className="settings-card-header">
+
+          <div>
+            <h2>Color Theme</h2>
+
+            <p>
+              Select your preferred MetricMind accent color.
+            </p>
+          </div>
+
+        </div>
+
+        <div className="theme-grid">
+
+          {Object.entries(themes).map(([key, item]) => (
+
+            <button
+              type="button"
+              key={key}
+              className={`theme-option ${
+                theme === key ? 'selected' : ''
+              }`}
+              onClick={() => changeTheme(key)}
+            >
+
+              <span
+                className="theme-color"
+                style={{
+                  background: item.primary,
+                }}
+              />
+
+              <span>{item.name}</span>
+
+              {theme === key && (
+                <Check size={18} />
+              )}
+
+            </button>
+
+          ))}
+
+        </div>
+
+      </section>
+
+    </div>
+  )
+}

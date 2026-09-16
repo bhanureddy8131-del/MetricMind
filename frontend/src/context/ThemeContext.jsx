@@ -2,103 +2,106 @@ import { createContext, useContext, useEffect, useState } from 'react'
 
 const ThemeContext = createContext(null)
 
-const themes = {
+export const themes = {
   cobalt: {
     name: 'Bold Cobalt',
     primary: '#4f46e5',
     primaryDark: '#3730a3',
     secondary: '#7c3aed',
-    background: '#f6f8ff',
-    surface: '#ffffff',
-    text: '#111827',
-    muted: '#64748b',
-    border: '#e2e8f0',
   },
-
   violet: {
-    name: 'Modern Violet',
+    name: 'Violet',
     primary: '#7c3aed',
     primaryDark: '#5b21b6',
     secondary: '#a855f7',
-    background: '#faf7ff',
-    surface: '#ffffff',
-    text: '#18181b',
-    muted: '#71717a',
-    border: '#e4e4e7',
   },
-
   blue: {
     name: 'Ocean Blue',
     primary: '#2563eb',
     primaryDark: '#1d4ed8',
     secondary: '#06b6d4',
-    background: '#f4f8ff',
-    surface: '#ffffff',
-    text: '#0f172a',
-    muted: '#64748b',
-    border: '#dbeafe',
+  },
+  emerald: {
+    name: 'Emerald',
+    primary: '#059669',
+    primaryDark: '#047857',
+    secondary: '#10b981',
+  },
+  rose: {
+    name: 'Rose',
+    primary: '#e11d48',
+    primaryDark: '#be123c',
+    secondary: '#f43f5e',
   },
 }
 
 export function ThemeProvider({ children }) {
-  const [dark, setDark] = useState(() => {
-    return localStorage.getItem('metricmind_dark') === 'true'
-  })
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem('metricmind_theme') || 'cobalt'
+  )
 
-  const [themeName, setThemeName] = useState(() => {
-    return localStorage.getItem('metricmind_theme') || 'cobalt'
-  })
-
-  const theme = themes[themeName] || themes.cobalt
+  const [dark, setDark] = useState(
+    () => localStorage.getItem('metricmind_dark') === 'true'
+  )
 
   useEffect(() => {
-    localStorage.setItem('metricmind_dark', String(dark))
-    localStorage.setItem('metricmind_theme', themeName)
-
     const root = document.documentElement
+    const selected = themes[theme] || themes.cobalt
 
-    root.style.setProperty('--primary', theme.primary)
-    root.style.setProperty('--primary-dark', theme.primaryDark)
-    root.style.setProperty('--secondary', theme.secondary)
+    root.style.setProperty('--primary', selected.primary)
+    root.style.setProperty('--primary-dark', selected.primaryDark)
+    root.style.setProperty('--secondary', selected.secondary)
 
     if (dark) {
-      root.style.setProperty('--background', '#0b1020')
-      root.style.setProperty('--surface', '#111827')
-      root.style.setProperty('--surface-2', '#182235')
-      root.style.setProperty('--text', '#f8fafc')
-      root.style.setProperty('--muted', '#94a3b8')
-      root.style.setProperty('--border', '#273449')
       root.classList.add('dark')
-    } else {
-      root.style.setProperty('--background', theme.background)
-      root.style.setProperty('--surface', theme.surface)
-      root.style.setProperty('--surface-2', '#f8fafc')
-      root.style.setProperty('--text', theme.text)
-      root.style.setProperty('--muted', theme.muted)
-      root.style.setProperty('--border', theme.border)
-      root.classList.remove('dark')
-    }
-  }, [dark, themeName, theme])
+      root.setAttribute('data-theme', theme)
 
-  const toggleDarkMode = () => {
-    setDark((value) => !value)
+      root.style.setProperty('--background', '#000000')
+      root.style.setProperty('--surface', '#0a0a0a')
+      root.style.setProperty('--surface-2', '#141414')
+      root.style.setProperty('--text', '#ffffff')
+      root.style.setProperty('--muted', '#a3a3a3')
+      root.style.setProperty('--border', '#262626')
+
+      document.body.style.backgroundColor = '#000000'
+      document.body.style.color = '#ffffff'
+    } else {
+      root.classList.remove('dark')
+      root.setAttribute('data-theme', theme)
+
+      root.style.setProperty('--background', '#f6f8ff')
+      root.style.setProperty('--surface', '#ffffff')
+      root.style.setProperty('--surface-2', '#f1f5f9')
+      root.style.setProperty('--text', '#111827')
+      root.style.setProperty('--muted', '#64748b')
+      root.style.setProperty('--border', '#e2e8f0')
+
+      document.body.style.backgroundColor = '#f6f8ff'
+      document.body.style.color = '#111827'
+    }
+
+    localStorage.setItem('metricmind_theme', theme)
+    localStorage.setItem('metricmind_dark', String(dark))
+  }, [theme, dark])
+
+  function changeTheme(themeName) {
+    if (themes[themeName]) {
+      setTheme(themeName)
+    }
   }
 
-  const changeTheme = (name) => {
-    if (themes[name]) {
-      setThemeName(name)
-    }
+  function toggleDarkMode() {
+    setDark((current) => !current)
   }
 
   return (
     <ThemeContext.Provider
       value={{
-        dark,
-        themeName,
         theme,
         themes,
-        toggleDarkMode,
+        dark,
         changeTheme,
+        toggleDarkMode,
       }}
     >
       {children}
