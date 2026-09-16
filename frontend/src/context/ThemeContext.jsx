@@ -35,6 +35,40 @@ export const themes = {
   },
 }
 
+function setMode(themeName, darkMode) {
+  const root = document.documentElement
+  const body = document.body
+  const selected = themes[themeName] || themes.cobalt
+
+  root.setAttribute('data-mode', darkMode ? 'dark' : 'light')
+
+  root.style.setProperty('--primary', selected.primary)
+  root.style.setProperty('--primary-dark', selected.primaryDark)
+  root.style.setProperty('--secondary', selected.secondary)
+
+  if (darkMode) {
+    root.style.setProperty('--background', '#000000')
+    root.style.setProperty('--surface', '#0a0a0a')
+    root.style.setProperty('--surface-2', '#171717')
+    root.style.setProperty('--text', '#ffffff')
+    root.style.setProperty('--muted', '#a3a3a3')
+    root.style.setProperty('--border', '#303030')
+
+    body.style.background = '#000000'
+    body.style.color = '#ffffff'
+  } else {
+    root.style.setProperty('--background', '#f6f8ff')
+    root.style.setProperty('--surface', '#ffffff')
+    root.style.setProperty('--surface-2', '#f1f5f9')
+    root.style.setProperty('--text', '#111827')
+    root.style.setProperty('--muted', '#64748b')
+    root.style.setProperty('--border', '#e2e8f0')
+
+    body.style.background = '#f6f8ff'
+    body.style.color = '#111827'
+  }
+}
+
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(
     () => localStorage.getItem('metricmind_theme') || 'cobalt'
@@ -45,53 +79,19 @@ export function ThemeProvider({ children }) {
   )
 
   useEffect(() => {
-    const root = document.documentElement
-    const selected = themes[theme] || themes.cobalt
-
-    root.style.setProperty('--primary', selected.primary)
-    root.style.setProperty('--primary-dark', selected.primaryDark)
-    root.style.setProperty('--secondary', selected.secondary)
-
-    if (dark) {
-      root.classList.add('dark')
-      root.setAttribute('data-theme', theme)
-
-      root.style.setProperty('--background', '#000000')
-      root.style.setProperty('--surface', '#0a0a0a')
-      root.style.setProperty('--surface-2', '#141414')
-      root.style.setProperty('--text', '#ffffff')
-      root.style.setProperty('--muted', '#a3a3a3')
-      root.style.setProperty('--border', '#262626')
-
-      document.body.style.backgroundColor = '#000000'
-      document.body.style.color = '#ffffff'
-    } else {
-      root.classList.remove('dark')
-      root.setAttribute('data-theme', theme)
-
-      root.style.setProperty('--background', '#f6f8ff')
-      root.style.setProperty('--surface', '#ffffff')
-      root.style.setProperty('--surface-2', '#f1f5f9')
-      root.style.setProperty('--text', '#111827')
-      root.style.setProperty('--muted', '#64748b')
-      root.style.setProperty('--border', '#e2e8f0')
-
-      document.body.style.backgroundColor = '#f6f8ff'
-      document.body.style.color = '#111827'
-    }
+    setMode(theme, dark)
 
     localStorage.setItem('metricmind_theme', theme)
     localStorage.setItem('metricmind_dark', String(dark))
   }, [theme, dark])
 
-  function changeTheme(themeName) {
-    if (themes[themeName]) {
-      setTheme(themeName)
-    }
+  function toggleDarkMode() {
+    setDark((previous) => !previous)
   }
 
-  function toggleDarkMode() {
-    setDark((current) => !current)
+  function changeTheme(themeName) {
+    if (!themes[themeName]) return
+    setTheme(themeName)
   }
 
   return (
@@ -100,8 +100,8 @@ export function ThemeProvider({ children }) {
         theme,
         themes,
         dark,
-        changeTheme,
         toggleDarkMode,
+        changeTheme,
       }}
     >
       {children}

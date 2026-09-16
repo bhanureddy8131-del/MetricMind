@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import DatasetUpload from './pages/DatasetUpload'
+import Settings from './pages/Settings'
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('metricmind_token')
@@ -24,6 +25,7 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <Routes>
+
             <Route path="/login" element={<Login />} />
 
             <Route path="/register" element={<Register />} />
@@ -64,7 +66,17 @@ export default function App() {
               }
             />
 
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
+                </ProtectedRoute>
+              }
+            />
+
             <Route path="*" element={<Navigate to="/" replace />} />
+
           </Routes>
         </AuthProvider>
       </ThemeProvider>

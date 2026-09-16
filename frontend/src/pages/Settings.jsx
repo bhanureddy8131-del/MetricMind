@@ -20,16 +20,19 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* APPEARANCE */}
+      {/* ================================
+          APPEARANCE
+          ================================ */}
+
       <section className="settings-card">
 
         <div className="settings-card-header">
 
           <div className="settings-icon">
             {dark ? (
-              <Moon size={22} />
+              <Moon size={24} />
             ) : (
-              <Sun size={22} />
+              <Sun size={24} />
             )}
           </div>
 
@@ -38,7 +41,7 @@ export default function Settings() {
 
             <p>
               {dark
-                ? 'Dark mode is currently enabled.'
+                ? 'Black mode is currently enabled.'
                 : 'Light mode is currently enabled.'}
             </p>
           </div>
@@ -48,12 +51,12 @@ export default function Settings() {
         <div className="dark-mode-row">
 
           <div>
-            <strong>Dark Mode</strong>
+            <strong>Black Mode</strong>
 
             <span>
               {dark
-                ? 'Use the dark interface'
-                : 'Use the light interface'}
+                ? 'MetricMind is using black mode'
+                : 'MetricMind is using light mode'}
             </span>
           </div>
 
@@ -61,7 +64,7 @@ export default function Settings() {
             type="button"
             className={`dark-toggle ${dark ? 'active' : ''}`}
             onClick={toggleDarkMode}
-            aria-label="Toggle dark mode"
+            aria-label="Toggle black mode"
           >
             <span className="dark-toggle-circle">
               {dark ? (
@@ -76,7 +79,10 @@ export default function Settings() {
 
       </section>
 
-      {/* COLOR THEME */}
+      {/* ================================
+          COLOR THEME
+          ================================ */}
+
       <section className="settings-card">
 
         <div className="settings-card-header">
@@ -98,16 +104,18 @@ export default function Settings() {
             <button
               type="button"
               key={key}
-              className={`theme-option ${
-                theme === key ? 'selected' : ''
-              }`}
+              className={
+                `theme-option ${
+                  theme === key ? 'selected' : ''
+                }`
+              }
               onClick={() => changeTheme(key)}
             >
 
               <span
                 className="theme-color"
                 style={{
-                  background: item.primary,
+                  backgroundColor: item.primary,
                 }}
               />
 
