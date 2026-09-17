@@ -1,12 +1,24 @@
 import axios from 'axios'
 
+/*
+ * MetricMind API
+ *
+ * Browser / Phone:
+ *   https://pasta-vision-lugged.ngrok-free.dev/api/...
+ *
+ * Vite proxy:
+ *   /api -> http://127.0.0.1:8001/api
+ */
+
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  'http://127.0.0.1:8001/api'
+  import.meta.env.VITE_API_BASE_URL || '/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 120000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 })
 
 // ======================================================
@@ -46,7 +58,7 @@ api.interceptors.response.use(
     console.error(
       'MetricMind API error:',
       error?.response?.status,
-      error?.response?.data || error.message
+      error?.response?.data || error?.message
     )
 
     if (error?.response?.status === 401) {
@@ -66,16 +78,12 @@ api.interceptors.response.use(
         : error?.message ||
           'Unable to connect to MetricMind backend.'
 
-    return Promise.reject(
-      new Error(message)
-    )
+    return Promise.reject(new Error(message))
   }
 )
 
 // ======================================================
 // QUERY
-// IMPORTANT:
-// Return the COMPLETE backend response.
 // ======================================================
 
 async function runQuery(question) {
@@ -93,19 +101,13 @@ async function runQuery(question) {
 }
 
 // ======================================================
-// EXTRACT NUMBER FROM QUERY RESULT
+// EXTRACT NUMBER
 // ======================================================
 
 function extractValue(result) {
   if (!result) {
     return 0
   }
-
-  // Backend returns:
-  // {
-  //   data: [...]
-  //   answer: "..."
-  // }
 
   if (Array.isArray(result.data)) {
     if (result.data.length === 0) {
@@ -114,9 +116,7 @@ function extractValue(result) {
 
     const firstRow = result.data[0]
 
-    if (
-      typeof firstRow === 'number'
-    ) {
+    if (typeof firstRow === 'number') {
       return firstRow
     }
 
@@ -124,10 +124,8 @@ function extractValue(result) {
       firstRow &&
       typeof firstRow === 'object'
     ) {
-      const values =
-        Object.values(firstRow)
+      const values = Object.values(firstRow)
 
-      // Prefer numeric values
       for (const value of values) {
         if (
           typeof value === 'number' &&
@@ -147,21 +145,14 @@ function extractValue(result) {
     }
   }
 
-  // Sometimes data itself is numeric
-  if (
-    typeof result.data === 'number'
-  ) {
+  if (typeof result.data === 'number') {
     return result.data
   }
 
-  // Fallback to answer text
-  if (
-    typeof result.answer === 'string'
-  ) {
-    const match =
-      result.answer.match(
-        /-?\d[\d,]*(?:\.\d+)?/
-      )
+  if (typeof result.answer === 'string') {
+    const match = result.answer.match(
+      /-?\d[\d,]*(?:\.\d+)?/
+    )
 
     if (match) {
       return Number(
@@ -370,10 +361,7 @@ export const apiService = {
   // DATASET UPLOAD
   // ----------------------------------------------------
 
-  uploadDataset(
-    file,
-    onUploadProgress
-  ) {
+  uploadDataset(file, onUploadProgress) {
     const token = getToken()
 
     if (!token) {
@@ -386,18 +374,14 @@ export const apiService = {
 
     const formData = new FormData()
 
-    formData.append(
-      'file',
-      file
-    )
+    formData.append('file', file)
 
     return api.post(
       '/datasets/upload',
       formData,
       {
         headers: {
-          Authorization:
-            `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
 
         onUploadProgress,
@@ -416,9 +400,7 @@ export const apiService = {
   },
 
   getActiveDataset() {
-    return api.get(
-      '/datasets/active'
-    )
+    return api.get('/datasets/active')
   },
 
   getDataset(datasetId) {

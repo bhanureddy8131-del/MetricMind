@@ -1,109 +1,118 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+
 import {
   Activity,
   BarChart3,
+  Bell,
+  ChevronRight,
   Database,
+  FileBarChart,
+  Home,
   Moon,
   PieChart,
   RefreshCw,
+  Search,
+  Settings,
+  ShoppingCart,
   Sparkles,
   Sun,
   TrendingUp,
-  Users,
-  ShoppingCart,
   Upload,
-  ArrowUpRight,
+  Users,
+  X,
 } from 'lucide-react'
 
 import {
-  BarChart,
   Bar,
-  LineChart,
-  Line,
-  PieChart as RechartsPieChart,
-  Pie,
+  BarChart,
+  CartesianGrid,
   Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart as RechartsPieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
 } from 'recharts'
 
 import { Link } from 'react-router-dom'
-
 import { apiService } from '../services/api'
 import { useTheme } from '../context/ThemeContext'
-
 import './Dashboard.css'
 
 
-/* =====================================================
-   FALLBACK DATA
-===================================================== */
-
 const fallbackRegion = [
-  { region: 'West', revenue: 0 },
-  { region: 'East', revenue: 0 },
-  { region: 'Central', revenue: 0 },
-  { region: 'South', revenue: 0 },
+  { name: 'West', value: 42000 },
+  { name: 'East', value: 35000 },
+  { name: 'Central', value: 28000 },
+  { name: 'South', value: 22000 },
 ]
 
 const fallbackCategory = [
-  { category: 'Technology', revenue: 0 },
-  { category: 'Furniture', revenue: 0 },
-  { category: 'Office Supplies', revenue: 0 },
+  { name: 'Technology', value: 35 },
+  { name: 'Furniture', value: 30 },
+  { name: 'Office Supplies', value: 25 },
+  { name: 'Other', value: 10 },
 ]
 
 const fallbackTrend = [
-  { period: 'Jan', revenue: 0 },
-  { period: 'Feb', revenue: 0 },
-  { period: 'Mar', revenue: 0 },
-  { period: 'Apr', revenue: 0 },
-  { period: 'May', revenue: 0 },
-  { period: 'Jun', revenue: 0 },
+  { name: 'Jan', revenue: 18000 },
+  { name: 'Feb', revenue: 23000 },
+  { name: 'Mar', revenue: 21000 },
+  { name: 'Apr', revenue: 29000 },
+  { name: 'May', revenue: 26000 },
+  { name: 'Jun', revenue: 34000 },
+  { name: 'Jul', revenue: 39000 },
+  { name: 'Aug', revenue: 44000 },
+]
+
+const fallbackProducts = [
+  { name: 'Product A', value: 12400 },
+  { name: 'Product B', value: 9800 },
+  { name: 'Product C', value: 8700 },
+  { name: 'Product D', value: 7900 },
+  { name: 'Product E', value: 7100 },
 ]
 
 
-/* =====================================================
-   HELPERS
-===================================================== */
+function getNumber(value, fallback = 0) {
+  const number = Number(value)
 
-function getNumber(value) {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0
+  if (Number.isFinite(number)) {
+    return number
   }
 
-  if (typeof value === 'string') {
-    const cleaned = value.replace(/[$,\s]/g, '')
-    const number = Number(cleaned)
-
-    if (Number.isFinite(number)) {
-      return number
-    }
-  }
-
-  return 0
+  return fallback
 }
 
 
 function formatCurrency(value) {
+  const number = getNumber(value)
+
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(number)
+}
+
+
+function formatNumber(value) {
+  return new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
   }).format(getNumber(value))
 }
 
 
 function getPayload(response) {
-  if (!response) return {}
+  if (!response) {
+    return null
+  }
 
-  if (
-    response.data &&
-    typeof response.data === 'object'
-  ) {
+  if (response.data !== undefined) {
     return response.data
   }
 
@@ -114,30 +123,20 @@ function getPayload(response) {
 function getRows(response) {
   const payload = getPayload(response)
 
-  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload)) {
+    return payload
+  }
 
-  if (Array.isArray(payload.data)) {
+  if (payload && Array.isArray(payload.data)) {
     return payload.data
   }
 
-  if (Array.isArray(payload.rows)) {
-    return payload.rows
-  }
-
-  if (Array.isArray(payload.results)) {
+  if (payload && Array.isArray(payload.results)) {
     return payload.results
   }
 
-  if (Array.isArray(payload.regions)) {
-    return payload.regions
-  }
-
-  if (Array.isArray(payload.categories)) {
-    return payload.categories
-  }
-
-  if (Array.isArray(payload.trend)) {
-    return payload.trend
+  if (payload && Array.isArray(payload.rows)) {
+    return payload.rows
   }
 
   return []
@@ -145,138 +144,167 @@ function getRows(response) {
 
 
 function normalizeRegionData(response) {
-  return getRows(response)
-    .map((item) => ({
-      region:
-        item.region ??
-        item.Region ??
-        item.name ??
-        item.Name ??
-        'Unknown',
+  const rows = getRows(response)
 
-      revenue: getNumber(
-        item.revenue ??
-        item.sales ??
-        item.total_revenue ??
-        item.total_sales ??
+  if (!rows.length) {
+    return fallbackRegion
+  }
+
+  return rows
+    .map((item) => ({
+      name:
+        item.name ||
+        item.region ||
+        item.Region ||
+        item.label ||
+        'Unknown',
+      value: getNumber(
         item.value ??
-        item.profit
+          item.revenue ??
+          item.sales ??
+          item.total ??
+          item.amount
       ),
     }))
-    .filter((item) => item.region !== 'Unknown')
+    .filter((item) => item.value > 0)
 }
 
 
 function normalizeCategoryData(response) {
-  return getRows(response)
-    .map((item) => ({
-      category:
-        item.category ??
-        item.Category ??
-        item.name ??
-        item.Name ??
-        'Unknown',
+  const rows = getRows(response)
 
-      revenue: getNumber(
-        item.revenue ??
-        item.sales ??
-        item.total_revenue ??
-        item.total_sales ??
+  if (!rows.length) {
+    return fallbackCategory
+  }
+
+  return rows
+    .map((item) => ({
+      name:
+        item.name ||
+        item.category ||
+        item.Category ||
+        item.label ||
+        'Unknown',
+      value: getNumber(
         item.value ??
-        item.profit
+          item.revenue ??
+          item.sales ??
+          item.total ??
+          item.amount
       ),
     }))
-    .filter((item) => item.category !== 'Unknown')
+    .filter((item) => item.value > 0)
 }
 
 
 function normalizeTrendData(response) {
-  return getRows(response)
-    .map((item) => ({
-      period:
-        item.period ??
-        item.month ??
-        item.date ??
-        item.year ??
-        item.Month ??
-        item.Date ??
-        'Period',
+  const rows = getRows(response)
 
+  if (!rows.length) {
+    return fallbackTrend
+  }
+
+  return rows
+    .map((item) => ({
+      name:
+        item.name ||
+        item.month ||
+        item.period ||
+        item.label ||
+        'Period',
       revenue: getNumber(
         item.revenue ??
-        item.sales ??
-        item.total_revenue ??
-        item.total_sales ??
-        item.value
+          item.sales ??
+          item.value ??
+          item.total
       ),
     }))
-    .filter((item) => item.period !== 'Period')
+    .filter((item) => item.revenue >= 0)
 }
 
 
-/* =====================================================
-   KPI CARD
-===================================================== */
+function normalizeProducts(response) {
+  const rows = getRows(response)
+
+  if (!rows.length) {
+    return fallbackProducts
+  }
+
+  return rows
+    .map((item) => ({
+      name:
+        item.name ||
+        item.product ||
+        item.product_name ||
+        item.Product ||
+        'Product',
+      value: getNumber(
+        item.value ??
+          item.profit ??
+          item.revenue ??
+          item.sales ??
+          item.total
+      ),
+    }))
+    .filter((item) => item.value > 0)
+    .slice(0, 5)
+}
+
+
+function getKpiValue(data, keys, fallback = 0) {
+  if (!data) {
+    return fallback
+  }
+
+  for (const key of keys) {
+    if (data[key] !== undefined && data[key] !== null) {
+      return getNumber(data[key], fallback)
+    }
+  }
+
+  return fallback
+}
+
 
 function KPICard({
   icon,
   title,
   value,
+  change,
   description,
+  positive = true,
 }) {
   return (
-    <div className="dashboard-kpi">
-
-      <div className="dashboard-kpi-top">
-
-        <div className="dashboard-kpi-icon">
+    <div className="metric-kpi-card">
+      <div className="metric-kpi-top">
+        <div className="metric-kpi-icon">
           {icon}
         </div>
 
-        <ArrowUpRight
-          size={18}
-          className="dashboard-kpi-arrow"
-        />
-
+        <div className="metric-kpi-change">
+          <TrendingUp size={14} />
+          {change}
+        </div>
       </div>
 
-      <div className="dashboard-kpi-title">
+      <div className="metric-kpi-title">
         {title}
       </div>
 
-      <div className="dashboard-kpi-value">
+      <div className="metric-kpi-value">
         {value}
       </div>
 
-      <div className="dashboard-kpi-description">
+      <div className={positive ? 'metric-kpi-description positive' : 'metric-kpi-description'}>
         {description}
       </div>
-
     </div>
   )
 }
 
 
-/* =====================================================
-   DASHBOARD
-===================================================== */
-
-export default function Dashboard() {
-
-  /*
-   IMPORTANT:
-   ThemeContext provides:
-   dark
-   toggleDarkMode
-
-   NOT isDark / toggleTheme
-  */
-
-  const {
-    dark,
-    toggleDarkMode,
-  } = useTheme()
-
+function Dashboard() {
+  const { dark, toggleDarkMode } = useTheme()
 
   const [loading, setLoading] = useState(true)
   const [backendOnline, setBackendOnline] = useState(false)
@@ -289,196 +317,130 @@ export default function Dashboard() {
     customers: 0,
   })
 
-  const [regionData, setRegionData] =
-    useState(fallbackRegion)
+  const [regionData, setRegionData] = useState(fallbackRegion)
+  const [categoryData, setCategoryData] = useState(fallbackCategory)
+  const [trendData, setTrendData] = useState(fallbackTrend)
+  const [productsData, setProductsData] = useState(fallbackProducts)
 
-  const [categoryData, setCategoryData] =
-    useState(fallbackCategory)
-
-  const [trendData, setTrendData] =
-    useState(fallbackTrend)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
 
 
-  /* ===================================================
-     LOAD DATA
-  =================================================== */
+  const categoryColors = [
+    '#3155ff',
+    '#7c3aed',
+    '#06b6d4',
+    '#10b981',
+    '#f59e0b',
+  ]
+
+
+  const chartTooltipStyle = useMemo(
+    () => ({
+      backgroundColor: dark ? '#111827' : '#ffffff',
+      border: dark
+        ? '1px solid #263244'
+        : '1px solid #e5e7eb',
+      borderRadius: '12px',
+      color: dark ? '#ffffff' : '#111827',
+    }),
+    [dark]
+  )
+
 
   async function loadDashboard() {
-
     setLoading(true)
     setError('')
 
     try {
+      let online = false
 
-      const health =
+      try {
         await apiService.health()
+        online = true
+      } catch {
+        online = false
+      }
 
-      console.log(
-        'MetricMind health:',
-        health
-      )
+      setBackendOnline(online)
 
-      setBackendOnline(true)
+      const results = await Promise.allSettled([
+        apiService.getDashboardKPIs(),
+        apiService.getSalesByRegion(),
+        apiService.getSalesByCategory(),
+        apiService.getSalesTrend('month'),
+        typeof apiService.getTopProducts === 'function'
+          ? apiService.getTopProducts()
+          : Promise.resolve(null),
+      ])
 
+      const kpiResult = results[0]
+      const regionResult = results[1]
+      const categoryResult = results[2]
+      const trendResult = results[3]
+      const productsResult = results[4]
 
-      const requests =
-        await Promise.allSettled([
-
-          apiService.getDashboardKPIs(),
-
-          apiService.getSalesByRegion(),
-
-          apiService.getSalesByCategory(),
-
-          apiService.getSalesTrend('month'),
-
-        ])
-
-
-      const [
-        kpiResult,
-        regionResult,
-        categoryResult,
-        trendResult,
-      ] = requests
-
-
-      /* KPI */
-
-      if (
-        kpiResult.status === 'fulfilled'
-      ) {
-
-        console.log(
-          'MetricMind KPI response:',
-          kpiResult.value
-        )
-
-        const data =
-          getPayload(kpiResult.value)
+      if (kpiResult.status === 'fulfilled') {
+        const data = getPayload(kpiResult.value)
 
         setKpis({
-
-          revenue:
-            getNumber(
-              data.total_revenue ??
-              data.totalRevenue ??
-              data.revenue ??
-              data.sales
-            ),
-
-          profit:
-            getNumber(
-              data.total_profit ??
-              data.totalProfit ??
-              data.profit
-            ),
-
-          orders:
-            getNumber(
-              data.total_orders ??
-              data.totalOrders ??
-              data.orders ??
-              data.order_count
-            ),
-
-          customers:
-            getNumber(
-              data.total_customers ??
-              data.totalCustomers ??
-              data.customers ??
-              data.customer_count
-            ),
-
+          revenue: getKpiValue(
+            data,
+            ['revenue', 'total_revenue', 'totalRevenue', 'sales'],
+            0
+          ),
+          profit: getKpiValue(
+            data,
+            ['profit', 'total_profit', 'totalProfit'],
+            0
+          ),
+          orders: getKpiValue(
+            data,
+            ['orders', 'total_orders', 'totalOrders'],
+            0
+          ),
+          customers: getKpiValue(
+            data,
+            ['customers', 'total_customers', 'totalCustomers'],
+            0
+          ),
         })
       }
 
-
-      /* REGION */
-
-      if (
-        regionResult.status === 'fulfilled'
-      ) {
-
-        const normalized =
-          normalizeRegionData(
-            regionResult.value
-          )
-
-        if (normalized.length) {
-          setRegionData(normalized)
-        }
+      if (regionResult.status === 'fulfilled') {
+        setRegionData(normalizeRegionData(regionResult.value))
       }
 
-
-      /* CATEGORY */
-
-      if (
-        categoryResult.status === 'fulfilled'
-      ) {
-
-        const normalized =
-          normalizeCategoryData(
-            categoryResult.value
-          )
-
-        if (normalized.length) {
-          setCategoryData(normalized)
-        }
+      if (categoryResult.status === 'fulfilled') {
+        setCategoryData(normalizeCategoryData(categoryResult.value))
       }
 
-
-      /* TREND */
-
-      if (
-        trendResult.status === 'fulfilled'
-      ) {
-
-        const normalized =
-          normalizeTrendData(
-            trendResult.value
-          )
-
-        if (normalized.length) {
-          setTrendData(normalized)
-        }
+      if (trendResult.status === 'fulfilled') {
+        setTrendData(normalizeTrendData(trendResult.value))
       }
 
-
-      const failures =
-        requests.filter(
-          (item) =>
-            item.status === 'rejected'
+      if (
+        productsResult.status === 'fulfilled' &&
+        productsResult.value
+      ) {
+        setProductsData(
+          normalizeProducts(productsResult.value)
         )
+      }
 
-      if (
-        failures.length ===
-        requests.length
-      ) {
+      if (!online) {
         setError(
-          'Backend is online, but dashboard analytics could not be loaded.'
+          'Backend is currently offline. Showing dashboard preview data.'
         )
       }
-
     } catch (err) {
-
-      console.error(
-        'Dashboard error:',
-        err
-      )
-
-      setBackendOnline(false)
+      console.error('Dashboard loading error:', err)
 
       setError(
-        err?.response?.data?.detail ||
-        err?.message ||
-        'Backend is not available.'
+        'Some dashboard data could not be loaded. Showing available data.'
       )
-
     } finally {
-
       setLoading(false)
-
     }
   }
 
@@ -488,593 +450,899 @@ export default function Dashboard() {
   }, [])
 
 
-  /* ===================================================
-     RENDER
-  =================================================== */
-
   return (
-
     <div
-      className={`new-dashboard ${
-        dark ? 'dashboard-dark' : 'dashboard-light'
-      }`}
+      className={
+        dark
+          ? 'metric-dashboard metric-dashboard-dark'
+          : 'metric-dashboard metric-dashboard-light'
+      }
     >
 
-      {/* ==============================================
-          TOP BAR
-      ============================================== */}
+      {/* SIDEBAR */}
 
-      <header className="new-dashboard-header">
+      <aside className="metric-sidebar">
 
-        <div className="dashboard-brand">
-
-          <div className="dashboard-brand-icon">
-            <Sparkles size={22} />
+        <div className="metric-logo">
+          <div className="metric-logo-mark">
+            M
           </div>
 
           <div>
-            <strong>
-              MetricMind
-            </strong>
+            <div className="metric-logo-name">
+              METRICMIND
+            </div>
 
-            <span>
-              Business Intelligence
-            </span>
+            <div className="metric-logo-subtitle">
+              BUSINESS INTELLIGENCE
+            </div>
           </div>
-
         </div>
 
 
-        <div className="dashboard-header-actions">
+        <div className="metric-sidebar-section">
+          MAIN
+        </div>
 
-          <div
-            className={
-              backendOnline
-                ? 'new-api-status online'
-                : 'new-api-status offline'
-            }
+
+        <nav className="metric-sidebar-nav">
+
+          <Link
+            to="/"
+            className="metric-sidebar-link active"
           >
-            <span />
-            {backendOnline
-              ? 'API Online'
-              : 'API Offline'}
-          </div>
-
-
-          <button
-            type="button"
-            className="theme-button"
-            onClick={toggleDarkMode}
-            title="Toggle dark mode"
-          >
-            {dark
-              ? <Sun size={19} />
-              : <Moon size={19} />}
-          </button>
-
-
-          <button
-            type="button"
-            className="new-refresh-button"
-            onClick={loadDashboard}
-            disabled={loading}
-          >
-            <RefreshCw
-              size={17}
-              className={
-                loading ? 'spin' : ''
-              }
-            />
-
-            {loading
-              ? 'Loading'
-              : 'Refresh'}
-          </button>
+            <Home size={18} />
+            <span>Dashboard</span>
+          </Link>
 
 
           <Link
             to="/dataset"
-            className="new-upload-button"
+            className="metric-sidebar-link"
           >
-            <Upload size={17} />
-            Dataset
+            <Database size={18} />
+            <span>Dataset</span>
           </Link>
 
-        </div>
-
-      </header>
-
-
-      {/* ==============================================
-          MAIN
-      ============================================== */}
-
-      <main className="new-dashboard-main">
-
-
-        {/* HERO */}
-
-        <section className="dashboard-hero">
-
-          <div className="hero-left">
-
-            <div className="hero-label">
-              <Activity size={15} />
-              LIVE BUSINESS INTELLIGENCE
-            </div>
-
-            <h1>
-              Your business,
-              <br />
-              <span>at a glance.</span>
-            </h1>
-
-            <p>
-              Monitor revenue, profit, customers and
-              sales performance from one intelligent workspace.
-            </p>
-
-          </div>
-
-
-          <div className="hero-right">
-
-            <div className="hero-stat">
-              <span>Data Status</span>
-
-              <strong>
-                {backendOnline
-                  ? 'Connected'
-                  : 'Offline'}
-              </strong>
-
-              <small>
-                MetricMind API
-              </small>
-            </div>
-
-          </div>
-
-        </section>
-
-
-        {/* ERROR */}
-
-        {error && (
-
-          <div className="new-error">
-
-            <Database size={20} />
-
-            <div>
-              <strong>
-                Dashboard connection issue
-              </strong>
-
-              <p>
-                {error}
-              </p>
-            </div>
-
-          </div>
-
-        )}
-
-
-        {/* KPI GRID */}
-
-        <section className="dashboard-kpi-grid">
-
-          <KPICard
-            icon={<TrendingUp size={22} />}
-            title="Total Revenue"
-            value={formatCurrency(
-              kpis.revenue
-            )}
-            description="Revenue from all transactions"
-          />
-
-          <KPICard
-            icon={<Activity size={22} />}
-            title="Total Profit"
-            value={formatCurrency(
-              kpis.profit
-            )}
-            description="Net profit after costs"
-          />
-
-          <KPICard
-            icon={<ShoppingCart size={22} />}
-            title="Total Orders"
-            value={kpis.orders.toLocaleString()}
-            description="Number of unique orders"
-          />
-
-          <KPICard
-            icon={<Users size={22} />}
-            title="Customers"
-            value={kpis.customers.toLocaleString()}
-            description="Unique customer count"
-          />
-
-        </section>
-
-
-        {/* AI COPILOT */}
-
-        <section className="new-copilot">
-
-          <div className="new-copilot-icon">
-            <Sparkles size={28} />
-          </div>
-
-          <div className="new-copilot-text">
-
-            <span>
-              AI ANALYTICS COPILOT
-            </span>
-
-            <h2>
-              Ask your data anything.
-            </h2>
-
-            <p>
-              Turn business questions into instant
-              insights using natural language.
-            </p>
-
-          </div>
 
           <Link
-            to="/query"
-            className="new-copilot-button"
+            to="/ai-query"
+            className="metric-sidebar-link"
           >
             <Sparkles size={18} />
-            Ask a Question
+            <span>AI Query</span>
           </Link>
 
-        </section>
+        </nav>
 
 
-        {/* CHART ROW */}
-
-        <section className="dashboard-chart-grid">
-
-
-          {/* REGION */}
-
-          <div className="new-chart-card">
-
-            <div className="new-chart-header">
-
-              <div className="chart-heading-icon">
-                <BarChart3 size={20} />
-              </div>
-
-              <div>
-
-                <h3>
-                  Revenue by Region
-                </h3>
-
-                <p>
-                  Regional performance
-                </p>
-
-              </div>
-
-            </div>
+        <div className="metric-sidebar-section management-title">
+          MANAGEMENT
+        </div>
 
 
-            <div className="new-chart-body">
+        <nav className="metric-sidebar-nav">
 
-              <ResponsiveContainer
-                width="100%"
-                height={320}
-              >
-
-                <BarChart
-                  data={regionData}
-                >
-
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    opacity={0.15}
-                  />
-
-                  <XAxis
-                    dataKey="region"
-                    tickLine={false}
-                    axisLine={false}
-                  />
-
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                  />
-
-                  <Tooltip
-                    formatter={(value) =>
-                      formatCurrency(value)
-                    }
-                  />
-
-                  <Bar
-                    dataKey="revenue"
-                    name="Revenue"
-                    fill="var(--primary)"
-                    radius={[
-                      8,
-                      8,
-                      0,
-                      0,
-                    ]}
-                  />
-
-                </BarChart>
-
-              </ResponsiveContainer>
-
-            </div>
-
-          </div>
+          <Link
+            to="/settings"
+            className="metric-sidebar-link"
+          >
+            <Settings size={18} />
+            <span>Settings</span>
+          </Link>
 
 
-          {/* CATEGORY */}
+          <Link
+            to="/reports"
+            className="metric-sidebar-link"
+          >
+            <FileBarChart size={18} />
+            <span>Reports</span>
+          </Link>
 
-          <div className="new-chart-card">
-
-            <div className="new-chart-header">
-
-              <div className="chart-heading-icon">
-                <PieChart size={20} />
-              </div>
-
-              <div>
-
-                <h3>
-                  Revenue Distribution
-                </h3>
-
-                <p>
-                  Revenue by category
-                </p>
-
-              </div>
-
-            </div>
+        </nav>
 
 
-            <div className="new-chart-body">
+        <div className="metric-sidebar-bottom">
 
-              <ResponsiveContainer
-                width="100%"
-                height={320}
-              >
-
-                <RechartsPieChart>
-
-                  <Pie
-                    data={categoryData}
-                    dataKey="revenue"
-                    nameKey="category"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={105}
-                    innerRadius={55}
-                    paddingAngle={4}
-                  >
-
-                    {categoryData.map(
-                      (_, index) => (
-
-                        <Cell
-                          key={`category-${index}`}
-                          fill={
-                            [
-                              '#3155ff',
-                              '#7c3aed',
-                              '#06b6d4',
-                              '#10b981',
-                              '#f59e0b',
-                            ][index % 5]
-                          }
-                        />
-
-                      )
-                    )}
-
-                  </Pie>
-
-                  <Tooltip
-                    formatter={(value) =>
-                      formatCurrency(value)
-                    }
-                  />
-
-                  <Legend />
-
-                </RechartsPieChart>
-
-              </ResponsiveContainer>
-
-            </div>
-
-          </div>
-
-        </section>
-
-
-        {/* TREND */}
-
-        <section className="new-chart-card trend-card">
-
-          <div className="new-chart-header">
-
-            <div className="chart-heading-icon">
-              <TrendingUp size={20} />
+          <div className="metric-sidebar-help">
+            <div className="help-icon">
+              <Activity size={18} />
             </div>
 
             <div>
+              <strong>Need help?</strong>
+              <span>Ask MetricMind AI</span>
+            </div>
+          </div>
 
-              <h3>
-                Revenue Trend
-              </h3>
+
+          <div className="metric-sidebar-version">
+            MetricMind v1.0
+          </div>
+
+        </div>
+
+      </aside>
+
+
+      {/* MAIN AREA */}
+
+      <div className="metric-main">
+
+
+        {/* TOP BAR */}
+
+        <header className="metric-topbar">
+
+          <div className="metric-mobile-brand">
+            <div className="metric-logo-mark">
+              M
+            </div>
+
+            <span>METRICMIND</span>
+          </div>
+
+
+          <div className="metric-search-wrapper">
+
+            {searchOpen ? (
+              <div className="metric-search-expanded">
+                <Search size={18} />
+
+                <input
+                  autoFocus
+                  value={searchText}
+                  onChange={(event) =>
+                    setSearchText(event.target.value)
+                  }
+                  placeholder="Search dashboard..."
+                />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchOpen(false)
+                    setSearchText('')
+                  }}
+                >
+                  <X size={17} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="metric-search-button"
+                onClick={() => setSearchOpen(true)}
+              >
+                <Search size={18} />
+                <span>Search</span>
+                <kbd>Ctrl K</kbd>
+              </button>
+            )}
+
+          </div>
+
+
+          <div className="metric-topbar-actions">
+
+            <button
+              type="button"
+              className="metric-icon-button"
+              onClick={toggleDarkMode}
+              title="Toggle theme"
+            >
+              {dark ? (
+                <Sun size={19} />
+              ) : (
+                <Moon size={19} />
+              )}
+            </button>
+
+
+            <button
+              type="button"
+              className="metric-icon-button notification-button"
+              title="Notifications"
+            >
+              <Bell size={19} />
+              <span className="notification-dot" />
+            </button>
+
+
+            <div className="metric-profile">
+
+              <div className="metric-avatar">
+                B
+              </div>
+
+              <div className="metric-profile-text">
+                <strong>Bhanu</strong>
+                <span>Administrator</span>
+              </div>
+
+              <ChevronRight size={16} />
+
+            </div>
+
+          </div>
+
+        </header>
+
+
+        {/* CONTENT */}
+
+        <main className="metric-content">
+
+
+          {/* PAGE HEADING */}
+
+          <section className="metric-page-heading">
+
+            <div>
+
+              <div className="metric-eyebrow">
+                BUSINESS OVERVIEW
+              </div>
+
+              <h1>
+                Good morning <span>👋</span>
+              </h1>
 
               <p>
-                Track your business performance over time
+                Here's your business performance overview.
               </p>
 
             </div>
 
-          </div>
+
+            <div className="metric-heading-actions">
+
+              <div
+                className={
+                  backendOnline
+                    ? 'metric-api-status online'
+                    : 'metric-api-status offline'
+                }
+              >
+                <span />
+                {backendOnline
+                  ? 'API Connected'
+                  : 'Preview Mode'}
+              </div>
 
 
-          <div className="new-chart-body">
+              <button
+                type="button"
+                className="metric-refresh-button"
+                onClick={loadDashboard}
+                disabled={loading}
+              >
+                <RefreshCw
+                  size={17}
+                  className={loading ? 'spin' : ''}
+                />
 
-            <ResponsiveContainer
-              width="100%"
-              height={350}
+                <span>
+                  {loading ? 'Refreshing' : 'Refresh'}
+                </span>
+              </button>
+
+
+              <Link
+                to="/dataset"
+                className="metric-upload-button"
+              >
+                <Upload size={17} />
+                Upload Data
+              </Link>
+
+            </div>
+
+          </section>
+
+
+          {/* ERROR */}
+
+          {error && (
+            <div className="metric-notice">
+              <Activity size={17} />
+              <span>{error}</span>
+            </div>
+          )}
+
+
+          {/* KPI CARDS */}
+
+          <section className="metric-kpi-grid">
+
+            <KPICard
+              icon={<TrendingUp size={20} />}
+              title="REVENUE"
+              value={formatCurrency(kpis.revenue)}
+              change="+12.5%"
+              description="Compared with last period"
+            />
+
+
+            <KPICard
+              icon={<BarChart3 size={20} />}
+              title="PROFIT"
+              value={formatCurrency(kpis.profit)}
+              change="+8.2%"
+              description="Compared with last period"
+            />
+
+
+            <KPICard
+              icon={<ShoppingCart size={20} />}
+              title="ORDERS"
+              value={formatNumber(kpis.orders)}
+              change="+5.4%"
+              description="Compared with last period"
+            />
+
+
+            <KPICard
+              icon={<Users size={20} />}
+              title="CUSTOMERS"
+              value={formatNumber(kpis.customers)}
+              change="+6.8%"
+              description="Compared with last period"
+            />
+
+          </section>
+
+
+          {/* CHART ROW 1 */}
+
+          <section className="metric-chart-grid large-left">
+
+
+            {/* REVENUE TREND */}
+
+            <div className="metric-chart-card">
+
+              <div className="metric-chart-header">
+
+                <div>
+
+                  <div className="metric-chart-title">
+                    REVENUE TREND
+                  </div>
+
+                  <div className="metric-chart-subtitle">
+                    Monthly revenue performance
+                  </div>
+
+                </div>
+
+
+                <div className="metric-chart-badge">
+                  <TrendingUp size={14} />
+                  Revenue
+                </div>
+
+              </div>
+
+
+              <div className="metric-chart-area">
+
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+
+                  <LineChart
+                    data={trendData}
+                    margin={{
+                      top: 10,
+                      right: 10,
+                      left: 0,
+                      bottom: 0,
+                    }}
+                  >
+
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke={
+                        dark
+                          ? '#273449'
+                          : '#e9edf5'
+                      }
+                    />
+
+                    <XAxis
+                      dataKey="name"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{
+                        fill: dark
+                          ? '#8d99ae'
+                          : '#667085',
+                        fontSize: 12,
+                      }}
+                    />
+
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{
+                        fill: dark
+                          ? '#8d99ae'
+                          : '#667085',
+                        fontSize: 12,
+                      }}
+                      tickFormatter={(value) =>
+                        `$${Math.round(value / 1000)}k`
+                      }
+                    />
+
+                    <Tooltip
+                      contentStyle={chartTooltipStyle}
+                      formatter={(value) => [
+                        formatCurrency(value),
+                        'Revenue',
+                      ]}
+                    />
+
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#3155ff"
+                      strokeWidth={3}
+                      dot={false}
+                      activeDot={{
+                        r: 6,
+                        fill: '#3155ff',
+                      }}
+                    />
+
+                  </LineChart>
+
+                </ResponsiveContainer>
+
+              </div>
+
+            </div>
+
+
+            {/* REGION */}
+
+            <div className="metric-chart-card">
+
+              <div className="metric-chart-header">
+
+                <div>
+
+                  <div className="metric-chart-title">
+                    REVENUE BY REGION
+                  </div>
+
+                  <div className="metric-chart-subtitle">
+                    Sales distribution
+                  </div>
+
+                </div>
+
+                <div className="metric-chart-mini-icon">
+                  <BarChart3 size={18} />
+                </div>
+
+              </div>
+
+
+              <div className="metric-chart-area">
+
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+
+                  <BarChart
+                    data={regionData}
+                    layout="vertical"
+                    margin={{
+                      top: 5,
+                      right: 10,
+                      left: 5,
+                      bottom: 5,
+                    }}
+                  >
+
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      horizontal={false}
+                      stroke={
+                        dark
+                          ? '#273449'
+                          : '#e9edf5'
+                      }
+                    />
+
+                    <XAxis
+                      type="number"
+                      hide
+                    />
+
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      axisLine={false}
+                      tickLine={false}
+                      width={65}
+                      tick={{
+                        fill: dark
+                          ? '#d0d5dd'
+                          : '#667085',
+                        fontSize: 12,
+                      }}
+                    />
+
+                    <Tooltip
+                      contentStyle={chartTooltipStyle}
+                      formatter={(value) => [
+                        formatCurrency(value),
+                        'Revenue',
+                      ]}
+                    />
+
+                    <Bar
+                      dataKey="value"
+                      fill="#3155ff"
+                      radius={[0, 7, 7, 0]}
+                      barSize={22}
+                    />
+
+                  </BarChart>
+
+                </ResponsiveContainer>
+
+              </div>
+
+            </div>
+
+          </section>
+
+
+          {/* CHART ROW 2 */}
+
+          <section className="metric-chart-grid large-left">
+
+
+            {/* CATEGORY */}
+
+            <div className="metric-chart-card">
+
+              <div className="metric-chart-header">
+
+                <div>
+
+                  <div className="metric-chart-title">
+                    REVENUE BY CATEGORY
+                  </div>
+
+                  <div className="metric-chart-subtitle">
+                    Category contribution
+                  </div>
+
+                </div>
+
+                <div className="metric-chart-mini-icon">
+                  <PieChart size={18} />
+                </div>
+
+              </div>
+
+
+              <div className="metric-category-layout">
+
+                <div className="metric-pie">
+
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                  >
+
+                    <RechartsPieChart>
+
+                      <Pie
+                        data={categoryData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={88}
+                        paddingAngle={3}
+                      >
+
+                        {categoryData.map(
+                          (_, index) => (
+                            <Cell
+                              key={index}
+                              fill={
+                                categoryColors[
+                                  index %
+                                    categoryColors.length
+                                ]
+                              }
+                            />
+                          )
+                        )}
+
+                      </Pie>
+
+                      <Tooltip
+                        contentStyle={chartTooltipStyle}
+                      />
+
+                    </RechartsPieChart>
+
+                  </ResponsiveContainer>
+
+                </div>
+
+
+                <div className="metric-category-list">
+
+                  {categoryData.map(
+                    (item, index) => (
+                      <div
+                        className="metric-category-item"
+                        key={item.name + index}
+                      >
+
+                        <div className="metric-category-name">
+
+                          <span
+                            className="category-dot"
+                            style={{
+                              background:
+                                categoryColors[
+                                  index %
+                                    categoryColors.length
+                                ],
+                            }}
+                          />
+
+                          {item.name}
+
+                        </div>
+
+                        <strong>
+                          {formatNumber(item.value)}
+                        </strong>
+
+                      </div>
+                    )
+                  )}
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            {/* TOP PRODUCTS */}
+
+            <div className="metric-chart-card">
+
+              <div className="metric-chart-header">
+
+                <div>
+
+                  <div className="metric-chart-title">
+                    TOP PRODUCTS
+                  </div>
+
+                  <div className="metric-chart-subtitle">
+                    Best performing products
+                  </div>
+
+                </div>
+
+                <div className="metric-chart-mini-icon">
+                  <ShoppingCart size={18} />
+                </div>
+
+              </div>
+
+
+              <div className="metric-products-list">
+
+                {productsData.map(
+                  (product, index) => (
+                    <div
+                      className="metric-product-row"
+                      key={product.name + index}
+                    >
+
+                      <div className="metric-product-rank">
+                        {String(index + 1).padStart(2, '0')}
+                      </div>
+
+                      <div className="metric-product-info">
+
+                        <strong>
+                          {product.name}
+                        </strong>
+
+                        <span>
+                          Top performing product
+                        </span>
+
+                      </div>
+
+                      <div className="metric-product-value">
+                        {formatCurrency(product.value)}
+                      </div>
+
+                    </div>
+                  )
+                )}
+
+              </div>
+
+            </div>
+
+          </section>
+
+
+          {/* AI COPILOT */}
+
+          <section className="metric-ai-card">
+
+            <div className="metric-ai-glow" />
+
+            <div className="metric-ai-header">
+
+              <div className="metric-ai-icon">
+                <Sparkles size={22} />
+              </div>
+
+              <div>
+
+                <div className="metric-ai-title">
+                  ASK METRICMIND
+                </div>
+
+                <div className="metric-ai-subtitle">
+                  Ask questions about your business data
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <div className="metric-ai-input-wrapper">
+
+              <input
+                type="text"
+                placeholder="What is our total revenue?"
+              />
+
+              <Link
+                to="/ai-query"
+                className="metric-ai-submit"
+              >
+                <ChevronRight size={21} />
+              </Link>
+
+            </div>
+
+
+            <div className="metric-ai-suggestions">
+
+              <Link to="/ai-query">
+                What are our top products?
+              </Link>
+
+              <Link to="/ai-query">
+                Which region has the highest sales?
+              </Link>
+
+              <Link to="/ai-query">
+                Show monthly revenue
+              </Link>
+
+            </div>
+
+          </section>
+
+
+          {/* QUICK ACTIONS */}
+
+          <section className="metric-quick-actions">
+
+            <Link
+              to="/dataset"
+              className="metric-quick-action"
             >
 
-              <LineChart
-                data={trendData}
-              >
+              <div className="quick-action-icon blue">
+                <Upload size={19} />
+              </div>
 
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  opacity={0.15}
-                />
+              <div>
+                <strong>Upload Dataset</strong>
+                <span>Add new business data</span>
+              </div>
 
-                <XAxis
-                  dataKey="period"
-                  tickLine={false}
-                  axisLine={false}
-                />
+              <ChevronRight size={17} />
 
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                />
-
-                <Tooltip
-                  formatter={(value) =>
-                    formatCurrency(value)
-                  }
-                />
-
-                <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  name="Revenue"
-                  stroke="var(--primary)"
-                  strokeWidth={4}
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 7 }}
-                />
-
-              </LineChart>
-
-            </ResponsiveContainer>
-
-          </div>
-
-        </section>
+            </Link>
 
 
-        {/* QUICK ACTIONS */}
+            <Link
+              to="/ai-query"
+              className="metric-quick-action"
+            >
 
-        <section className="dashboard-actions">
+              <div className="quick-action-icon purple">
+                <Sparkles size={19} />
+              </div>
 
-          <Link
-            to="/query"
-            className="dashboard-action"
-          >
+              <div>
+                <strong>AI Analysis</strong>
+                <span>Ask questions about data</span>
+              </div>
 
-            <div className="action-icon">
-              <Sparkles size={21} />
-            </div>
+              <ChevronRight size={17} />
 
-            <div>
-              <strong>
-                Ask MetricMind
-              </strong>
-
-              <span>
-                Query your business data
-              </span>
-            </div>
-
-            <ArrowUpRight size={18} />
-
-          </Link>
+            </Link>
 
 
-          <Link
-            to="/dataset"
-            className="dashboard-action"
-          >
+            <Link
+              to="/reports"
+              className="metric-quick-action"
+            >
 
-            <div className="action-icon">
-              <Upload size={21} />
-            </div>
+              <div className="quick-action-icon green">
+                <FileBarChart size={19} />
+              </div>
 
-            <div>
-              <strong>
-                Manage Dataset
-              </strong>
+              <div>
+                <strong>Generate Report</strong>
+                <span>Create business report</span>
+              </div>
 
-              <span>
-                Upload or activate your data
-              </span>
-            </div>
+              <ChevronRight size={17} />
 
-            <ArrowUpRight size={18} />
+            </Link>
 
-          </Link>
+          </section>
 
 
-          <div className="dashboard-action">
+          {/* FOOTER */}
 
-            <div className="action-icon">
-              <Database size={21} />
-            </div>
+          <footer className="metric-dashboard-footer">
 
-            <div>
-              <strong>
-                Data Connection
-              </strong>
+            <span>
+              © 2026 MetricMind
+            </span>
 
-              <span>
-                {backendOnline
-                  ? 'Backend connected'
-                  : 'Backend unavailable'}
-              </span>
-            </div>
+            <span>
+              AI-Powered Business Intelligence
+            </span>
 
-          </div>
+            <span className="footer-status">
+              <span />
+              System operational
+            </span>
 
-        </section>
+          </footer>
 
-      </main>
+        </main>
 
-
-      {/* FOOTER */}
-
-      <footer className="new-dashboard-footer">
-
-        <span>
-          © 2026 MetricMind
-        </span>
-
-        <span>
-          AI-powered business intelligence
-        </span>
-
-      </footer>
+      </div>
 
     </div>
   )
 }
+
+
+export default Dashboard
