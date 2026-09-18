@@ -14,9 +14,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.database import get_db
-from app.models import User
+from app.models import User, SalesRecord
+
 from app.schemas import (
     QueryRequest,
     QueryResponse,
@@ -30,6 +32,7 @@ from app.schemas import (
     TokenResponse,
     MeResponse,
 )
+
 from app.semantic_layer.loader import semantic_layer
 from app.services.query_service import QueryService
 
@@ -71,7 +74,9 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 
-security = HTTPBearer(auto_error=False)
+security = HTTPBearer(
+    auto_error=False
+)
 
 
 # ============================================================
@@ -102,6 +107,7 @@ def verify_password(
             plain_password.encode("utf-8"),
             hashed_password.encode("utf-8"),
         )
+
     except Exception:
         return False
 
@@ -169,6 +175,7 @@ def get_current_user(
     # --------------------------------------------------------
 
     if credentials is None:
+
         logger.warning(
             "Authentication failed: Authorization header missing"
         )
@@ -185,6 +192,7 @@ def get_current_user(
     token = credentials.credentials
 
     if not token:
+
         logger.warning(
             "Authentication failed: empty token"
         )
@@ -199,6 +207,7 @@ def get_current_user(
     # --------------------------------------------------------
 
     try:
+
         payload = jwt.decode(
             token,
             SECRET_KEY,
@@ -206,6 +215,7 @@ def get_current_user(
         )
 
     except JWTError as exc:
+
         logger.warning(
             f"Authentication failed: JWT error: {exc}"
         )
@@ -222,6 +232,7 @@ def get_current_user(
     user_id = payload.get("sub")
 
     if not user_id:
+
         logger.warning(
             "Authentication failed: JWT has no user ID"
         )
@@ -232,7 +243,9 @@ def get_current_user(
         )
 
     try:
+
         user_id = int(user_id)
+
     except (TypeError, ValueError):
 
         logger.warning(
@@ -346,6 +359,114 @@ def list_metrics():
         raise HTTPException(
             status_code=500,
             detail="Error retrieving metrics",
+        )
+
+
+# ============================================================
+# DASHBOARD KPIs
+# ============================================================
+
+@router.get("/dashboard/kpis")
+def dashboard_kpis(
+    db: Session = Depends(get_db),
+):
+    """
+    Return real KPI values from the sales table.
+
+    Used by the MetricMind dashboard.
+    """
+
+    try:
+
+        # ----------------------------------------------------
+        # Total Revenue
+        # ----------------------------------------------------
+
+        revenue = (
+            db.query(
+                func.coalesce(
+                    func.sum(SalesRecord.sales),
+                    0,
+                )
+            )
+            .scalar()
+        )
+
+        # ----------------------------------------------------
+        # Total Profit
+        # ----------------------------------------------------
+
+        profit = (
+            db.query(
+                func.coalesce(
+                    func.sum(SalesRecord.profit),
+                    0,
+                )
+            )
+            .scalar()
+        )
+
+        # ----------------------------------------------------
+        # Unique Orders
+        # ----------------------------------------------------
+
+        orders = (
+            db.query(
+                func.count(
+                    func.distinct(
+                        SalesRecord.order_id
+                    )
+                )
+            )
+            .scalar()
+        )
+
+        # ----------------------------------------------------
+        # Unique Customers
+        # ----------------------------------------------------
+
+        customers = (
+            db.query(
+                func.count(
+                    func.distinct(
+                        SalesRecord.customer_id
+                    )
+                )
+            )
+            .scalar()
+        )
+
+        # ----------------------------------------------------
+        # Return dashboard values
+        # ----------------------------------------------------
+
+        return {
+            "revenue": round(
+                float(revenue or 0),
+                2,
+            ),
+            "profit": round(
+                float(profit or 0),
+                2,
+            ),
+            "orders": int(
+                orders or 0
+            ),
+            "customers": int(
+                customers or 0
+            ),
+        }
+
+    except Exception as e:
+
+        logger.error(
+            f"Error retrieving dashboard KPIs: {e}",
+            exc_info=True,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Error retrieving dashboard KPIs",
         )
 
 
@@ -467,6 +588,7 @@ def query(
         )
 
     except HTTPException:
+
         raise
 
     except Exception as e:
@@ -554,7 +676,9 @@ def register(
     )
 
     db.add(new_user)
+
     db.commit()
+
     db.refresh(new_user)
 
     access_token = create_access_token(
@@ -671,7 +795,9 @@ def logout():
 # ADD AUTH ROUTES
 # ============================================================
 
-router.include_router(auth_router)
+router.include_router(
+    auth_router
+)
 
 
 # ============================================================
@@ -680,4 +806,6 @@ router.include_router(auth_router)
 
 from app.api.datasets import router as dataset_router
 
-router.include_router(dataset_router)
+router.include_router(
+    dataset_router
+)

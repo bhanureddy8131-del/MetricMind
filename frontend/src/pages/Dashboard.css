@@ -1700,3 +1700,33 @@
   }
 
 }
+.metric-add-data-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #3155ff;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(49, 85, 255, 0.22);
+}
+
+.metric-add-data-button:hover {
+  background: #2444d8;
+  transform: translateY(-1px);
+}
+
+.metric-add-data-button:active {
+  transform: translateY(0);
+}
+
+.metric-add-data-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

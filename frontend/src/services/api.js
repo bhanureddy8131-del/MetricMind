@@ -1,33 +1,16 @@
 import axios from 'axios'
 
-/*
- * MetricMind API
- *
- * Browser / Phone:
- *   https://pasta-vision-lugged.ngrok-free.dev/api/...
- *
- * Vite proxy:
- *   /api -> http://127.0.0.1:8001/api
- */
-
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || '/api'
+  import.meta.env.VITE_API_BASE_URL ||
+  'http://127.0.0.1:8001/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 })
-
-// ======================================================
-// TOKEN
-// ======================================================
-
-function getToken() {
-  return localStorage.getItem('metricmind_token')
-}
 
 // ======================================================
 // REQUEST INTERCEPTOR
@@ -35,7 +18,7 @@ function getToken() {
 
 api.interceptors.request.use(
   (config) => {
-    const token = getToken()
+    const token = localStorage.getItem('metricmind_token')
 
     if (token) {
       config.headers = config.headers || {}
@@ -53,132 +36,21 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => response,
-
   (error) => {
-    console.error(
-      'MetricMind API error:',
-      error?.response?.status,
-      error?.response?.data || error?.message
-    )
-
     if (error?.response?.status === 401) {
       localStorage.removeItem('metricmind_token')
-      localStorage.removeItem('metricmind_user')
 
-      if (window.location.pathname !== '/login') {
+      if (
+        window.location.pathname !== '/login' &&
+        window.location.pathname !== '/register'
+      ) {
         window.location.href = '/login'
       }
     }
 
-    const detail = error?.response?.data?.detail
-
-    const message =
-      typeof detail === 'string'
-        ? detail
-        : error?.message ||
-          'Unable to connect to MetricMind backend.'
-
-    return Promise.reject(new Error(message))
+    return Promise.reject(error)
   }
 )
-
-// ======================================================
-// QUERY
-// ======================================================
-
-async function runQuery(question) {
-  const response = await api.post('/query', {
-    question,
-  })
-
-  console.log(
-    'MetricMind query:',
-    question,
-    response.data
-  )
-
-  return response.data
-}
-
-// ======================================================
-// EXTRACT NUMBER
-// ======================================================
-
-function extractValue(result) {
-  if (!result) {
-    return 0
-  }
-
-  if (Array.isArray(result.data)) {
-    if (result.data.length === 0) {
-      return 0
-    }
-
-    const firstRow = result.data[0]
-
-    if (typeof firstRow === 'number') {
-      return firstRow
-    }
-
-    if (
-      firstRow &&
-      typeof firstRow === 'object'
-    ) {
-      const values = Object.values(firstRow)
-
-      for (const value of values) {
-        if (
-          typeof value === 'number' &&
-          Number.isFinite(value)
-        ) {
-          return value
-        }
-
-        if (
-          typeof value === 'string' &&
-          value.trim() !== '' &&
-          Number.isFinite(Number(value))
-        ) {
-          return Number(value)
-        }
-      }
-    }
-  }
-
-  if (typeof result.data === 'number') {
-    return result.data
-  }
-
-  if (typeof result.answer === 'string') {
-    const match = result.answer.match(
-      /-?\d[\d,]*(?:\.\d+)?/
-    )
-
-    if (match) {
-      return Number(
-        match[0].replace(/,/g, '')
-      )
-    }
-  }
-
-  return 0
-}
-
-// ======================================================
-// NORMALIZE QUERY DATA
-// ======================================================
-
-function normalizeQueryData(result) {
-  if (!result) {
-    return []
-  }
-
-  if (Array.isArray(result.data)) {
-    return result.data
-  }
-
-  return []
-}
 
 // ======================================================
 // API SERVICE
@@ -186,40 +58,21 @@ function normalizeQueryData(result) {
 
 export const apiService = {
 
-  // ----------------------------------------------------
   // HEALTH
-  // ----------------------------------------------------
-
   health() {
     return api.get('/health')
   },
 
-  // ----------------------------------------------------
   // AUTH
-  // ----------------------------------------------------
-
-  login(email, password) {
-    return api.post('/v1/auth/login', {
-      email: email.trim(),
-      password,
-    })
+  login(data) {
+    return api.post('/v1/auth/login', data)
   },
 
-  register(
-    full_name,
-    username,
-    email,
-    password
-  ) {
-    return api.post('/v1/auth/register', {
-      full_name: full_name.trim(),
-      username: username.trim(),
-      email: email.trim(),
-      password,
-    })
+  register(data) {
+    return api.post('/v1/auth/register', data)
   },
 
-  getCurrentUser() {
+  me() {
     return api.get('/v1/auth/me')
   },
 
@@ -227,10 +80,7 @@ export const apiService = {
     return api.post('/v1/auth/logout')
   },
 
-  // ----------------------------------------------------
   // METRICS
-  // ----------------------------------------------------
-
   metrics() {
     return api.get('/metrics')
   },
@@ -239,161 +89,116 @@ export const apiService = {
     return api.get('/dimensions')
   },
 
-  // ----------------------------------------------------
   // AI QUERY
-  // ----------------------------------------------------
+  query(data) {
+    let question = ''
 
-  query(question) {
-    return api.post('/query', {
-      question,
-    })
-  },
-
-  // ----------------------------------------------------
-  // DASHBOARD KPIs
-  // ----------------------------------------------------
-
-  async getDashboardKPIs() {
-    const [
-      revenueResult,
-      profitResult,
-      ordersResult,
-      customersResult,
-    ] = await Promise.all([
-      runQuery(
-        'What is our total revenue?'
-      ),
-
-      runQuery(
-        'What is our total profit?'
-      ),
-
-      runQuery(
-        'How many orders do we have?'
-      ),
-
-      runQuery(
-        'How many customers do we have?'
-      ),
-    ])
-
-    const result = {
-      total_revenue:
-        extractValue(revenueResult),
-
-      total_profit:
-        extractValue(profitResult),
-
-      total_orders:
-        extractValue(ordersResult),
-
-      total_customers:
-        extractValue(customersResult),
-    }
-
-    console.log(
-      'MetricMind Dashboard KPIs:',
-      result
-    )
-
-    return {
-      data: result,
-    }
-  },
-
-  // ----------------------------------------------------
-  // REVENUE BY REGION
-  // ----------------------------------------------------
-
-  async getSalesByRegion() {
-    const result = await runQuery(
-      'What is total revenue by region?'
-    )
-
-    return {
-      data: normalizeQueryData(result),
-    }
-  },
-
-  // ----------------------------------------------------
-  // REVENUE BY CATEGORY
-  // ----------------------------------------------------
-
-  async getSalesByCategory() {
-    const result = await runQuery(
-      'What is total revenue by category?'
-    )
-
-    return {
-      data: normalizeQueryData(result),
-    }
-  },
-
-  // ----------------------------------------------------
-  // TOP PRODUCTS
-  // ----------------------------------------------------
-
-  async getTopProducts() {
-    const result = await runQuery(
-      'Show top 10 products by profit'
-    )
-
-    return {
-      data: normalizeQueryData(result),
-    }
-  },
-
-  // ----------------------------------------------------
-  // REVENUE TREND
-  // ----------------------------------------------------
-
-  async getSalesTrend() {
-    const result = await runQuery(
-      'What is total revenue by month?'
-    )
-
-    return {
-      data: normalizeQueryData(result),
-    }
-  },
-
-  // ----------------------------------------------------
-  // DATASET UPLOAD
-  // ----------------------------------------------------
-
-  uploadDataset(file, onUploadProgress) {
-    const token = getToken()
-
-    if (!token) {
-      return Promise.reject(
-        new Error(
-          'No login token found. Please log in again.'
-        )
+    if (typeof data === 'string') {
+      question = data
+    } else if (data && typeof data === 'object') {
+      question = String(data.question || '')
+    } else {
+      throw new Error(
+        'Query must be a string or an object containing question'
       )
     }
 
-    const formData = new FormData()
+    if (!question.trim()) {
+      throw new Error('Question cannot be empty')
+    }
 
-    formData.append('file', file)
+    return api.post('/query', {
+      question: question.trim(),
+    })
+  },
 
-    return api.post(
-      '/datasets/upload',
-      formData,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+  // ====================================================
+  // DASHBOARD KPI
+  // ====================================================
 
-        onUploadProgress,
+  getDashboardKPIs() {
+    return api.get('/dashboard/kpis')
+  },
 
-        timeout: 120000,
-      }
+  // ====================================================
+  // REGION
+  // ====================================================
+
+  getSalesByRegion() {
+    return apiService.query(
+      'What is total revenue by region?'
     )
   },
 
-  // ----------------------------------------------------
-  // DATASETS
-  // ----------------------------------------------------
+  // ====================================================
+  // CATEGORY
+  // ====================================================
+
+  getSalesByCategory() {
+    return apiService.query(
+      'What is total revenue by category?'
+    )
+  },
+
+  // ====================================================
+  // TOP PRODUCTS
+  // ====================================================
+
+  getTopProducts() {
+    return apiService.query(
+      'Show top 10 products by profit'
+    )
+  },
+
+  // ====================================================
+  // SALES TREND
+  // ====================================================
+
+  getSalesTrend(period = 'month') {
+    let question = 'Show monthly revenue trend'
+
+    if (period === 'week') {
+      question = 'Show weekly revenue trend'
+    }
+
+    if (period === 'day') {
+      question = 'Show daily revenue trend'
+    }
+
+    if (period === 'year') {
+      question = 'Show yearly revenue trend'
+    }
+
+    return apiService.query(question)
+  },
+
+  // ====================================================
+  // BUSINESS DATA
+  // ====================================================
+
+  addBusinessData(data) {
+    return api.post('/data', data)
+  },
+
+  getBusinessData() {
+    return api.get('/data')
+  },
+
+  deleteBusinessData(id) {
+    return api.delete(`/data/${id}`)
+  },
+
+  // ====================================================
+  // DATASET
+  // ====================================================
+
+  uploadDataset(formData) {
+    return api.post('/datasets/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
 
   getDatasets() {
     return api.get('/datasets')
@@ -403,23 +208,17 @@ export const apiService = {
     return api.get('/datasets/active')
   },
 
-  getDataset(datasetId) {
-    return api.get(
-      `/datasets/${datasetId}`
-    )
+  getDataset(id) {
+    return api.get(`/datasets/${id}`)
   },
 
-  activateDataset(datasetId) {
-    return api.post(
-      `/datasets/${datasetId}/activate`
-    )
+  activateDataset(id) {
+    return api.post(`/datasets/${id}/activate`)
   },
 
-  deleteDataset(datasetId) {
-    return api.delete(
-      `/datasets/${datasetId}`
-    )
+  deleteDataset(id) {
+    return api.delete(`/datasets/${id}`)
   },
 }
 
-export default api
+export default apiService

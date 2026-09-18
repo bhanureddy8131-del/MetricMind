@@ -159,6 +159,8 @@ function AddData() {
         onSubmit={handleSubmit}
       >
 
+        {/* ORDER INFORMATION */}
+
         <section>
           <h2>Order Information</h2>
 
@@ -168,6 +170,7 @@ function AddData() {
               <label>Order ID *</label>
 
               <input
+                type="text"
                 name="order_id"
                 value={form.order_id}
                 onChange={handleChange}
@@ -192,6 +195,7 @@ function AddData() {
               <label>Customer Name *</label>
 
               <input
+                type="text"
                 name="customer_name"
                 value={form.customer_name}
                 onChange={handleChange}
@@ -202,6 +206,8 @@ function AddData() {
 
           </div>
         </section>
+
+        {/* LOCATION */}
 
         <section>
           <h2>Location</h2>
@@ -243,6 +249,7 @@ function AddData() {
               <label>State</label>
 
               <input
+                type="text"
                 name="state"
                 value={form.state}
                 onChange={handleChange}
@@ -254,6 +261,7 @@ function AddData() {
               <label>City</label>
 
               <input
+                type="text"
                 name="city"
                 value={form.city}
                 onChange={handleChange}
@@ -263,6 +271,8 @@ function AddData() {
 
           </div>
         </section>
+
+        {/* PRODUCT INFORMATION */}
 
         <section>
           <h2>Product Information</h2>
@@ -300,6 +310,7 @@ function AddData() {
               <label>Sub-Category</label>
 
               <input
+                type="text"
                 name="sub_category"
                 value={form.sub_category}
                 onChange={handleChange}
@@ -311,6 +322,7 @@ function AddData() {
               <label>Product Name *</label>
 
               <input
+                type="text"
                 name="product_name"
                 value={form.product_name}
                 onChange={handleChange}
@@ -321,6 +333,8 @@ function AddData() {
 
           </div>
         </section>
+
+        {/* SALES INFORMATION */}
 
         <section>
           <h2>Sales Information</h2>
@@ -384,6 +398,8 @@ function AddData() {
 
           </div>
         </section>
+
+        {/* PAYMENT AND SHIPPING */}
 
         <section>
           <h2>Payment & Shipping</h2>
@@ -457,12 +473,15 @@ function AddData() {
           </div>
         </section>
 
+        {/* ACTIONS */}
+
         <div className="form-actions">
 
           <button
             type="button"
             className="secondary-button"
             onClick={clearForm}
+            disabled={loading}
           >
             <RotateCcw size={18} />
             Clear
@@ -483,6 +502,7 @@ function AddData() {
         </div>
 
       </form>
+
     </div>
   )
 }

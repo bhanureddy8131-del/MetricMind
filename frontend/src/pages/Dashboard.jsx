@@ -10,6 +10,7 @@ import {
   Home,
   Moon,
   PieChart,
+  Plus,
   RefreshCw,
   Search,
   Settings,
@@ -27,7 +28,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   Line,
   LineChart,
   Pie,
@@ -38,9 +38,11 @@ import {
   YAxis,
 } from 'recharts'
 
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+
 import { apiService } from '../services/api'
 import { useTheme } from '../context/ThemeContext'
+
 import './Dashboard.css'
 
 
@@ -150,7 +152,7 @@ function normalizeRegionData(response) {
     return fallbackRegion
   }
 
-  return rows
+  const result = rows
     .map((item) => ({
       name:
         item.name ||
@@ -158,6 +160,7 @@ function normalizeRegionData(response) {
         item.Region ||
         item.label ||
         'Unknown',
+
       value: getNumber(
         item.value ??
           item.revenue ??
@@ -167,6 +170,8 @@ function normalizeRegionData(response) {
       ),
     }))
     .filter((item) => item.value > 0)
+
+  return result.length ? result : fallbackRegion
 }
 
 
@@ -177,7 +182,7 @@ function normalizeCategoryData(response) {
     return fallbackCategory
   }
 
-  return rows
+  const result = rows
     .map((item) => ({
       name:
         item.name ||
@@ -185,6 +190,7 @@ function normalizeCategoryData(response) {
         item.Category ||
         item.label ||
         'Unknown',
+
       value: getNumber(
         item.value ??
           item.revenue ??
@@ -194,6 +200,8 @@ function normalizeCategoryData(response) {
       ),
     }))
     .filter((item) => item.value > 0)
+
+  return result.length ? result : fallbackCategory
 }
 
 
@@ -204,7 +212,7 @@ function normalizeTrendData(response) {
     return fallbackTrend
   }
 
-  return rows
+  const result = rows
     .map((item) => ({
       name:
         item.name ||
@@ -212,6 +220,7 @@ function normalizeTrendData(response) {
         item.period ||
         item.label ||
         'Period',
+
       revenue: getNumber(
         item.revenue ??
           item.sales ??
@@ -220,6 +229,8 @@ function normalizeTrendData(response) {
       ),
     }))
     .filter((item) => item.revenue >= 0)
+
+  return result.length ? result : fallbackTrend
 }
 
 
@@ -230,7 +241,7 @@ function normalizeProducts(response) {
     return fallbackProducts
   }
 
-  return rows
+  const result = rows
     .map((item) => ({
       name:
         item.name ||
@@ -238,6 +249,7 @@ function normalizeProducts(response) {
         item.product_name ||
         item.Product ||
         'Product',
+
       value: getNumber(
         item.value ??
           item.profit ??
@@ -248,6 +260,8 @@ function normalizeProducts(response) {
     }))
     .filter((item) => item.value > 0)
     .slice(0, 5)
+
+  return result.length ? result : fallbackProducts
 }
 
 
@@ -295,7 +309,13 @@ function KPICard({
         {value}
       </div>
 
-      <div className={positive ? 'metric-kpi-description positive' : 'metric-kpi-description'}>
+      <div
+        className={
+          positive
+            ? 'metric-kpi-description positive'
+            : 'metric-kpi-description'
+        }
+      >
         {description}
       </div>
     </div>
@@ -304,6 +324,8 @@ function KPICard({
 
 
 function Dashboard() {
+  const navigate = useNavigate()
+
   const { dark, toggleDarkMode } = useTheme()
 
   const [loading, setLoading] = useState(true)
@@ -317,13 +339,23 @@ function Dashboard() {
     customers: 0,
   })
 
-  const [regionData, setRegionData] = useState(fallbackRegion)
-  const [categoryData, setCategoryData] = useState(fallbackCategory)
-  const [trendData, setTrendData] = useState(fallbackTrend)
-  const [productsData, setProductsData] = useState(fallbackProducts)
+  const [regionData, setRegionData] =
+    useState(fallbackRegion)
 
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [searchText, setSearchText] = useState('')
+  const [categoryData, setCategoryData] =
+    useState(fallbackCategory)
+
+  const [trendData, setTrendData] =
+    useState(fallbackTrend)
+
+  const [productsData, setProductsData] =
+    useState(fallbackProducts)
+
+  const [searchOpen, setSearchOpen] =
+    useState(false)
+
+  const [searchText, setSearchText] =
+    useState('')
 
 
   const categoryColors = [
@@ -337,12 +369,19 @@ function Dashboard() {
 
   const chartTooltipStyle = useMemo(
     () => ({
-      backgroundColor: dark ? '#111827' : '#ffffff',
+      backgroundColor: dark
+        ? '#111827'
+        : '#ffffff',
+
       border: dark
         ? '1px solid #263244'
         : '1px solid #e5e7eb',
+
       borderRadius: '12px',
-      color: dark ? '#ffffff' : '#111827',
+
+      color: dark
+        ? '#ffffff'
+        : '#111827',
     }),
     [dark]
   )
@@ -364,15 +403,17 @@ function Dashboard() {
 
       setBackendOnline(online)
 
-      const results = await Promise.allSettled([
-        apiService.getDashboardKPIs(),
-        apiService.getSalesByRegion(),
-        apiService.getSalesByCategory(),
-        apiService.getSalesTrend('month'),
-        typeof apiService.getTopProducts === 'function'
-          ? apiService.getTopProducts()
-          : Promise.resolve(null),
-      ])
+      const results =
+        await Promise.allSettled([
+          apiService.getDashboardKPIs(),
+          apiService.getSalesByRegion(),
+          apiService.getSalesByCategory(),
+          apiService.getSalesTrend('month'),
+
+          typeof apiService.getTopProducts === 'function'
+            ? apiService.getTopProducts()
+            : Promise.resolve(null),
+        ])
 
       const kpiResult = results[0]
       const regionResult = results[1]
@@ -380,65 +421,110 @@ function Dashboard() {
       const trendResult = results[3]
       const productsResult = results[4]
 
+
       if (kpiResult.status === 'fulfilled') {
         const data = getPayload(kpiResult.value)
 
         setKpis({
           revenue: getKpiValue(
             data,
-            ['revenue', 'total_revenue', 'totalRevenue', 'sales'],
+            [
+              'revenue',
+              'total_revenue',
+              'totalRevenue',
+              'sales',
+            ],
             0
           ),
+
           profit: getKpiValue(
             data,
-            ['profit', 'total_profit', 'totalProfit'],
+            [
+              'profit',
+              'total_profit',
+              'totalProfit',
+            ],
             0
           ),
+
           orders: getKpiValue(
             data,
-            ['orders', 'total_orders', 'totalOrders'],
+            [
+              'orders',
+              'total_orders',
+              'totalOrders',
+            ],
             0
           ),
+
           customers: getKpiValue(
             data,
-            ['customers', 'total_customers', 'totalCustomers'],
+            [
+              'customers',
+              'total_customers',
+              'totalCustomers',
+            ],
             0
           ),
         })
       }
 
+
       if (regionResult.status === 'fulfilled') {
-        setRegionData(normalizeRegionData(regionResult.value))
+        setRegionData(
+          normalizeRegionData(
+            regionResult.value
+          )
+        )
       }
+
 
       if (categoryResult.status === 'fulfilled') {
-        setCategoryData(normalizeCategoryData(categoryResult.value))
+        setCategoryData(
+          normalizeCategoryData(
+            categoryResult.value
+          )
+        )
       }
 
+
       if (trendResult.status === 'fulfilled') {
-        setTrendData(normalizeTrendData(trendResult.value))
+        setTrendData(
+          normalizeTrendData(
+            trendResult.value
+          )
+        )
       }
+
 
       if (
         productsResult.status === 'fulfilled' &&
         productsResult.value
       ) {
         setProductsData(
-          normalizeProducts(productsResult.value)
+          normalizeProducts(
+            productsResult.value
+          )
         )
       }
+
 
       if (!online) {
         setError(
           'Backend is currently offline. Showing dashboard preview data.'
         )
       }
+
     } catch (err) {
-      console.error('Dashboard loading error:', err)
+      console.error(
+        'Dashboard loading error:',
+        err
+      )
 
       setError(
         'Some dashboard data could not be loaded. Showing available data.'
       )
+
     } finally {
       setLoading(false)
     }
@@ -464,6 +550,7 @@ function Dashboard() {
       <aside className="metric-sidebar">
 
         <div className="metric-logo">
+
           <div className="metric-logo-mark">
             M
           </div>
@@ -477,6 +564,7 @@ function Dashboard() {
               BUSINESS INTELLIGENCE
             </div>
           </div>
+
         </div>
 
 
@@ -502,6 +590,15 @@ function Dashboard() {
           >
             <Database size={18} />
             <span>Dataset</span>
+          </Link>
+
+
+          <Link
+            to="/add-data"
+            className="metric-sidebar-link"
+          >
+            <Plus size={18} />
+            <span>Add Data</span>
           </Link>
 
 
@@ -546,6 +643,7 @@ function Dashboard() {
         <div className="metric-sidebar-bottom">
 
           <div className="metric-sidebar-help">
+
             <div className="help-icon">
               <Activity size={18} />
             </div>
@@ -554,6 +652,7 @@ function Dashboard() {
               <strong>Need help?</strong>
               <span>Ask MetricMind AI</span>
             </div>
+
           </div>
 
 
@@ -576,25 +675,33 @@ function Dashboard() {
         <header className="metric-topbar">
 
           <div className="metric-mobile-brand">
+
             <div className="metric-logo-mark">
               M
             </div>
 
-            <span>METRICMIND</span>
+            <span>
+              METRICMIND
+            </span>
+
           </div>
 
 
           <div className="metric-search-wrapper">
 
             {searchOpen ? (
+
               <div className="metric-search-expanded">
+
                 <Search size={18} />
 
                 <input
                   autoFocus
                   value={searchText}
                   onChange={(event) =>
-                    setSearchText(event.target.value)
+                    setSearchText(
+                      event.target.value
+                    )
                   }
                   placeholder="Search dashboard..."
                 />
@@ -608,17 +715,30 @@ function Dashboard() {
                 >
                   <X size={17} />
                 </button>
+
               </div>
+
             ) : (
+
               <button
                 type="button"
                 className="metric-search-button"
-                onClick={() => setSearchOpen(true)}
+                onClick={() =>
+                  setSearchOpen(true)
+                }
               >
                 <Search size={18} />
-                <span>Search</span>
-                <kbd>Ctrl K</kbd>
+
+                <span>
+                  Search
+                </span>
+
+                <kbd>
+                  Ctrl K
+                </kbd>
+
               </button>
+
             )}
 
           </div>
@@ -646,6 +766,7 @@ function Dashboard() {
               title="Notifications"
             >
               <Bell size={19} />
+
               <span className="notification-dot" />
             </button>
 
@@ -657,8 +778,15 @@ function Dashboard() {
               </div>
 
               <div className="metric-profile-text">
-                <strong>Bhanu</strong>
-                <span>Administrator</span>
+
+                <strong>
+                  Bhanu
+                </strong>
+
+                <span>
+                  Administrator
+                </span>
+
               </div>
 
               <ChevronRight size={16} />
@@ -706,6 +834,7 @@ function Dashboard() {
                 }
               >
                 <span />
+
                 {backendOnline
                   ? 'API Connected'
                   : 'Preview Mode'}
@@ -720,12 +849,30 @@ function Dashboard() {
               >
                 <RefreshCw
                   size={17}
-                  className={loading ? 'spin' : ''}
+                  className={
+                    loading ? 'spin' : ''
+                  }
                 />
 
                 <span>
-                  {loading ? 'Refreshing' : 'Refresh'}
+                  {loading
+                    ? 'Refreshing'
+                    : 'Refresh'}
                 </span>
+              </button>
+
+
+              {/* NEW ADD DATA BUTTON */}
+
+              <button
+                type="button"
+                className="metric-add-data-button"
+                onClick={() =>
+                  navigate('/add-data')
+                }
+              >
+                <Plus size={17} />
+                Add Data
               </button>
 
 
@@ -747,7 +894,10 @@ function Dashboard() {
           {error && (
             <div className="metric-notice">
               <Activity size={17} />
-              <span>{error}</span>
+
+              <span>
+                {error}
+              </span>
             </div>
           )}
 
@@ -757,36 +907,52 @@ function Dashboard() {
           <section className="metric-kpi-grid">
 
             <KPICard
-              icon={<TrendingUp size={20} />}
+              icon={
+                <TrendingUp size={20} />
+              }
               title="REVENUE"
-              value={formatCurrency(kpis.revenue)}
+              value={formatCurrency(
+                kpis.revenue
+              )}
               change="+12.5%"
               description="Compared with last period"
             />
 
 
             <KPICard
-              icon={<BarChart3 size={20} />}
+              icon={
+                <BarChart3 size={20} />
+              }
               title="PROFIT"
-              value={formatCurrency(kpis.profit)}
+              value={formatCurrency(
+                kpis.profit
+              )}
               change="+8.2%"
               description="Compared with last period"
             />
 
 
             <KPICard
-              icon={<ShoppingCart size={20} />}
+              icon={
+                <ShoppingCart size={20} />
+              }
               title="ORDERS"
-              value={formatNumber(kpis.orders)}
+              value={formatNumber(
+                kpis.orders
+              )}
               change="+5.4%"
               description="Compared with last period"
             />
 
 
             <KPICard
-              icon={<Users size={20} />}
+              icon={
+                <Users size={20} />
+              }
               title="CUSTOMERS"
-              value={formatNumber(kpis.customers)}
+              value={formatNumber(
+                kpis.customers
+              )}
               change="+6.8%"
               description="Compared with last period"
             />
@@ -794,12 +960,9 @@ function Dashboard() {
           </section>
 
 
-          {/* CHART ROW 1 */}
+          {/* REVENUE TREND + REGION */}
 
           <section className="metric-chart-grid large-left">
-
-
-            {/* REVENUE TREND */}
 
             <div className="metric-chart-card">
 
@@ -816,7 +979,6 @@ function Dashboard() {
                   </div>
 
                 </div>
-
 
                 <div className="metric-chart-badge">
                   <TrendingUp size={14} />
@@ -875,12 +1037,16 @@ function Dashboard() {
                         fontSize: 12,
                       }}
                       tickFormatter={(value) =>
-                        `$${Math.round(value / 1000)}k`
+                        `$${Math.round(
+                          value / 1000
+                        )}k`
                       }
                     />
 
                     <Tooltip
-                      contentStyle={chartTooltipStyle}
+                      contentStyle={
+                        chartTooltipStyle
+                      }
                       formatter={(value) => [
                         formatCurrency(value),
                         'Revenue',
@@ -907,8 +1073,6 @@ function Dashboard() {
 
             </div>
 
-
-            {/* REGION */}
 
             <div className="metric-chart-card">
 
@@ -981,7 +1145,9 @@ function Dashboard() {
                     />
 
                     <Tooltip
-                      contentStyle={chartTooltipStyle}
+                      contentStyle={
+                        chartTooltipStyle
+                      }
                       formatter={(value) => [
                         formatCurrency(value),
                         'Revenue',
@@ -991,7 +1157,12 @@ function Dashboard() {
                     <Bar
                       dataKey="value"
                       fill="#3155ff"
-                      radius={[0, 7, 7, 0]}
+                      radius={[
+                        0,
+                        7,
+                        7,
+                        0,
+                      ]}
                       barSize={22}
                     />
 
@@ -1006,12 +1177,9 @@ function Dashboard() {
           </section>
 
 
-          {/* CHART ROW 2 */}
+          {/* CATEGORY + PRODUCTS */}
 
           <section className="metric-chart-grid large-left">
-
-
-            {/* CATEGORY */}
 
             <div className="metric-chart-card">
 
@@ -1075,7 +1243,9 @@ function Dashboard() {
                       </Pie>
 
                       <Tooltip
-                        contentStyle={chartTooltipStyle}
+                        contentStyle={
+                          chartTooltipStyle
+                        }
                       />
 
                     </RechartsPieChart>
@@ -1089,9 +1259,13 @@ function Dashboard() {
 
                   {categoryData.map(
                     (item, index) => (
+
                       <div
                         className="metric-category-item"
-                        key={item.name + index}
+                        key={
+                          item.name +
+                          index
+                        }
                       >
 
                         <div className="metric-category-name">
@@ -1112,10 +1286,13 @@ function Dashboard() {
                         </div>
 
                         <strong>
-                          {formatNumber(item.value)}
+                          {formatNumber(
+                            item.value
+                          )}
                         </strong>
 
                       </div>
+
                     )
                   )}
 
@@ -1125,8 +1302,6 @@ function Dashboard() {
 
             </div>
 
-
-            {/* TOP PRODUCTS */}
 
             <div className="metric-chart-card">
 
@@ -1155,13 +1330,19 @@ function Dashboard() {
 
                 {productsData.map(
                   (product, index) => (
+
                     <div
                       className="metric-product-row"
-                      key={product.name + index}
+                      key={
+                        product.name +
+                        index
+                      }
                     >
 
                       <div className="metric-product-rank">
-                        {String(index + 1).padStart(2, '0')}
+                        {String(
+                          index + 1
+                        ).padStart(2, '0')}
                       </div>
 
                       <div className="metric-product-info">
@@ -1177,10 +1358,13 @@ function Dashboard() {
                       </div>
 
                       <div className="metric-product-value">
-                        {formatCurrency(product.value)}
+                        {formatCurrency(
+                          product.value
+                        )}
                       </div>
 
                     </div>
+
                   )
                 )}
 
@@ -1258,6 +1442,40 @@ function Dashboard() {
 
           <section className="metric-quick-actions">
 
+
+            {/* ADD DATA */}
+
+            <button
+              type="button"
+              className="metric-quick-action"
+              onClick={() =>
+                navigate('/add-data')
+              }
+            >
+
+              <div className="quick-action-icon blue">
+                <Plus size={19} />
+              </div>
+
+              <div>
+
+                <strong>
+                  Add Business Data
+                </strong>
+
+                <span>
+                  Enter a new sales record
+                </span>
+
+              </div>
+
+              <ChevronRight size={17} />
+
+            </button>
+
+
+            {/* UPLOAD DATA */}
+
             <Link
               to="/dataset"
               className="metric-quick-action"
@@ -1268,14 +1486,23 @@ function Dashboard() {
               </div>
 
               <div>
-                <strong>Upload Dataset</strong>
-                <span>Add new business data</span>
+
+                <strong>
+                  Upload Dataset
+                </strong>
+
+                <span>
+                  Add new business data
+                </span>
+
               </div>
 
               <ChevronRight size={17} />
 
             </Link>
 
+
+            {/* AI ANALYSIS */}
 
             <Link
               to="/ai-query"
@@ -1287,14 +1514,23 @@ function Dashboard() {
               </div>
 
               <div>
-                <strong>AI Analysis</strong>
-                <span>Ask questions about data</span>
+
+                <strong>
+                  AI Analysis
+                </strong>
+
+                <span>
+                  Ask questions about data
+                </span>
+
               </div>
 
               <ChevronRight size={17} />
 
             </Link>
 
+
+            {/* REPORT */}
 
             <Link
               to="/reports"
@@ -1306,8 +1542,15 @@ function Dashboard() {
               </div>
 
               <div>
-                <strong>Generate Report</strong>
-                <span>Create business report</span>
+
+                <strong>
+                  Generate Report
+                </strong>
+
+                <span>
+                  Create business report
+                </span>
+
               </div>
 
               <ChevronRight size={17} />
@@ -1330,8 +1573,11 @@ function Dashboard() {
             </span>
 
             <span className="footer-status">
+
               <span />
+
               System operational
+
             </span>
 
           </footer>

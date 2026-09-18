@@ -1,9 +1,4 @@
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Navigate,
-} from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
@@ -15,47 +10,38 @@ import DatasetUpload from './pages/DatasetUpload'
 import AddData from './pages/AddData'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import AIQuery from './pages/AIQuery'
 
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('metricmind_token')
 
   if (!token) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-      />
-    )
+    return <Navigate to="/login" replace />
   }
 
   return children
 }
 
 
-export default function App() {
+function App() {
   return (
     <BrowserRouter>
-
       <ThemeProvider>
-
         <AuthProvider>
 
           <Routes>
 
-            {/* Login */}
             <Route
               path="/login"
               element={<Login />}
             />
 
-            {/* Register */}
             <Route
               path="/register"
               element={<Register />}
             />
 
-            {/* Dashboard */}
             <Route
               path="/"
               element={
@@ -74,7 +60,24 @@ export default function App() {
               }
             />
 
-            {/* Dataset */}
+            <Route
+              path="/ai-query"
+              element={
+                <ProtectedRoute>
+                  <AIQuery />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/query"
+              element={
+                <ProtectedRoute>
+                  <AIQuery />
+                </ProtectedRoute>
+              }
+            />
+
             <Route
               path="/dataset"
               element={
@@ -93,7 +96,6 @@ export default function App() {
               }
             />
 
-            {/* Add Data */}
             <Route
               path="/add-data"
               element={
@@ -103,7 +105,6 @@ export default function App() {
               }
             />
 
-            {/* Reports */}
             <Route
               path="/reports"
               element={
@@ -113,7 +114,6 @@ export default function App() {
               }
             />
 
-            {/* Settings */}
             <Route
               path="/settings"
               element={
@@ -123,23 +123,18 @@ export default function App() {
               }
             />
 
-            {/* Unknown URL */}
             <Route
               path="*"
-              element={
-                <Navigate
-                  to="/"
-                  replace
-                />
-              }
+              element={<Navigate to="/" replace />}
             />
 
           </Routes>
 
         </AuthProvider>
-
       </ThemeProvider>
-
     </BrowserRouter>
   )
 }
+
+
+export default App
