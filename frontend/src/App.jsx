@@ -11,7 +11,7 @@ import AddData from './pages/AddData'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import AIQuery from './pages/AIQuery'
-
+import Analytics from './pages/Analytics'
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('metricmind_token')
@@ -23,15 +23,14 @@ function ProtectedRoute({ children }) {
   return children
 }
 
-
 function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-
           <Routes>
 
+            {/* Authentication */}
             <Route
               path="/login"
               element={<Login />}
@@ -42,6 +41,7 @@ function App() {
               element={<Register />}
             />
 
+            {/* Dashboard */}
             <Route
               path="/"
               element={
@@ -60,6 +60,7 @@ function App() {
               }
             />
 
+            {/* AI Query */}
             <Route
               path="/ai-query"
               element={
@@ -78,6 +79,7 @@ function App() {
               }
             />
 
+            {/* Dataset */}
             <Route
               path="/dataset"
               element={
@@ -96,6 +98,7 @@ function App() {
               }
             />
 
+            {/* Add Data */}
             <Route
               path="/add-data"
               element={
@@ -105,6 +108,17 @@ function App() {
               }
             />
 
+            {/* Analytics */}
+            <Route
+              path="/analytics"
+              element={
+                <ProtectedRoute>
+                  <Analytics />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Reports */}
             <Route
               path="/reports"
               element={
@@ -114,6 +128,7 @@ function App() {
               }
             />
 
+            {/* Settings */}
             <Route
               path="/settings"
               element={
@@ -123,18 +138,17 @@ function App() {
               }
             />
 
+            {/* Unknown routes */}
             <Route
               path="*"
               element={<Navigate to="/" replace />}
             />
 
           </Routes>
-
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
   )
 }
-
 
 export default App

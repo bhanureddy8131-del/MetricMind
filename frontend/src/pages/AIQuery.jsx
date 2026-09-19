@@ -7,6 +7,10 @@ import {
   LineChart as LineChartIcon,
   Loader2,
   Database,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  User,
 } from 'lucide-react'
 
 import {
@@ -29,6 +33,10 @@ import apiService from '../services/api'
 import './AIQuery.css'
 
 
+// ============================================================
+// CHART TYPE DETECTION
+// ============================================================
+
 function getChartType(question, data) {
   const text = question.toLowerCase()
 
@@ -40,6 +48,7 @@ function getChartType(question, data) {
     text.includes('daily') ||
     text.includes('day') ||
     text.includes('yearly') ||
+    text.includes('year') ||
     text.includes('trend') ||
     text.includes('over time')
   ) {
@@ -61,6 +70,7 @@ function getChartType(question, data) {
     text.includes('state') ||
     text.includes('city') ||
     text.includes('product') ||
+    text.includes('segment') ||
     text.includes('top') ||
     text.includes('highest') ||
     text.includes('lowest') ||
@@ -77,6 +87,10 @@ function getChartType(question, data) {
   return null
 }
 
+
+// ============================================================
+// FIND LABEL + VALUE COLUMNS
+// ============================================================
 
 function getKeys(data) {
   if (!data || data.length === 0) {
@@ -102,23 +116,25 @@ function getKeys(data) {
     ) {
       labelKey = key
     }
+  }
+
+  for (const key of keys) {
+    const value = firstRow[key]
 
     if (
-      valueKey === null &&
+      typeof value === 'number' ||
       (
-        typeof value === 'number' ||
-        (
-          typeof value === 'string' &&
-          value.trim() !== '' &&
-          !Number.isNaN(Number(value))
-        )
+        typeof value === 'string' &&
+        value.trim() !== '' &&
+        !Number.isNaN(Number(value))
       )
     ) {
       valueKey = key
+      break
     }
   }
 
-  if (!labelKey) {
+  if (!labelKey && keys.length > 0) {
     labelKey = keys[0]
   }
 
@@ -132,6 +148,10 @@ function getKeys(data) {
   }
 }
 
+
+// ============================================================
+// FORMAT VALUES
+// ============================================================
 
 function formatValue(value) {
   if (value === null || value === undefined) {
@@ -147,6 +167,10 @@ function formatValue(value) {
   return String(value)
 }
 
+
+// ============================================================
+// AUTOMATIC CHART
+// ============================================================
 
 function AutomaticChart({ data, question }) {
   if (!data || data.length === 0) {
@@ -184,6 +208,11 @@ function AutomaticChart({ data, question }) {
     '#e2e6ff',
   ]
 
+
+  // ==========================================================
+  // PIE
+  // ==========================================================
+
   if (chartType === 'pie') {
     return (
       <section className="chart-panel">
@@ -191,10 +220,12 @@ function AutomaticChart({ data, question }) {
         <div className="chart-panel-header">
           <div className="chart-title-row">
             <PieChartIcon size={20} />
+
             <div>
-              <h3>Automatic Pie Chart</h3>
+              <h3>Revenue Distribution</h3>
+
               <span>
-                Chart selected from your question
+                Pie chart generated automatically
               </span>
             </div>
           </div>
@@ -213,12 +244,14 @@ function AutomaticChart({ data, question }) {
                 outerRadius={120}
                 label
               >
+
                 {chartData.map((entry, index) => (
                   <Cell
-                    key={'pie-cell-' + index}
+                    key={`pie-cell-${index}`}
                     fill={colors[index % colors.length]}
                   />
                 ))}
+
               </Pie>
 
               <Tooltip />
@@ -233,6 +266,10 @@ function AutomaticChart({ data, question }) {
   }
 
 
+  // ==========================================================
+  // LINE
+  // ==========================================================
+
   if (chartType === 'line') {
     return (
       <section className="chart-panel">
@@ -240,10 +277,12 @@ function AutomaticChart({ data, question }) {
         <div className="chart-panel-header">
           <div className="chart-title-row">
             <LineChartIcon size={20} />
+
             <div>
-              <h3>Automatic Line Chart</h3>
+              <h3>Trend Analysis</h3>
+
               <span>
-                Trend detected from your question
+                Line chart generated from your question
               </span>
             </div>
           </div>
@@ -255,9 +294,7 @@ function AutomaticChart({ data, question }) {
 
               <CartesianGrid strokeDasharray="3 3" />
 
-              <XAxis
-                dataKey="label"
-              />
+              <XAxis dataKey="label" />
 
               <YAxis />
 
@@ -283,6 +320,10 @@ function AutomaticChart({ data, question }) {
   }
 
 
+  // ==========================================================
+  // BAR
+  // ==========================================================
+
   if (chartType === 'bar') {
     return (
       <section className="chart-panel">
@@ -290,10 +331,12 @@ function AutomaticChart({ data, question }) {
         <div className="chart-panel-header">
           <div className="chart-title-row">
             <BarChart3 size={20} />
+
             <div>
-              <h3>Automatic Bar Chart</h3>
+              <h3>Comparison Analysis</h3>
+
               <span>
-                Comparison detected from your question
+                Bar chart generated automatically
               </span>
             </div>
           </div>
@@ -337,6 +380,10 @@ function AutomaticChart({ data, question }) {
 }
 
 
+// ============================================================
+// AI QUERY PAGE
+// ============================================================
+
 export default function AIQuery() {
 
   const [question, setQuestion] = useState('')
@@ -345,27 +392,51 @@ export default function AIQuery() {
 
   const [error, setError] = useState('')
 
-  const [result, setResult] = useState(null)
+  const [messages, setMessages] = useState([])
 
+  const [openSQL, setOpenSQL] = useState({})
+
+
+  // ==========================================================
+  // EXAMPLE QUESTIONS
+  // ==========================================================
 
   const examples = [
     'Show revenue by region',
     'Show sales distribution by category',
     'Show monthly revenue trend',
     'Show top 10 products by revenue',
+    'Show profit by segment',
   ]
 
 
-  const runQuery = async (queryText = question) => {
+  // ==========================================================
+  // RUN QUERY
+  // ==========================================================
 
-    const query = queryText.trim()
+  const runQuery = async (queryText) => {
 
-    if (!query) {
+    const query = String(queryText || '').trim()
+
+    if (!query || loading) {
       return
     }
 
-    setLoading(true)
+    setQuestion('')
     setError('')
+    setLoading(true)
+
+    const userMessage = {
+      id: Date.now(),
+      type: 'user',
+      question: query,
+    }
+
+    setMessages((previous) => [
+      ...previous,
+      userMessage,
+    ])
+
 
     try {
 
@@ -375,22 +446,49 @@ export default function AIQuery() {
 
       const responseData = response?.data || response
 
-      setResult({
-        ...responseData,
+      const rows =
+        responseData?.data ||
+        responseData?.rows ||
+        responseData?.results ||
+        []
+
+
+      const assistantMessage = {
+        id: Date.now() + 1,
+        type: 'assistant',
         question: query,
-      })
+        answer:
+          responseData?.answer ||
+          responseData?.message ||
+          'Here is the result of your query.',
+        data: rows,
+        sql: responseData?.sql || '',
+        metrics_used: responseData?.metrics_used || [],
+        dimensions_used:
+          responseData?.dimensions_used || [],
+        row_count:
+          responseData?.row_count ??
+          rows.length,
+        execution_time_ms:
+          responseData?.execution_time_ms,
+      }
+
+
+      setMessages((previous) => [
+        ...previous,
+        assistantMessage,
+      ])
 
     } catch (err) {
 
       console.error('AI Query error:', err)
 
-      setError(
+      const message =
         err?.response?.data?.detail ||
         err?.message ||
         'Unable to process your question.'
-      )
 
-      setResult(null)
+      setError(message)
 
     } finally {
 
@@ -400,24 +498,56 @@ export default function AIQuery() {
   }
 
 
+  // ==========================================================
+  // FORM SUBMIT
+  // ==========================================================
+
   const handleSubmit = (event) => {
 
     event.preventDefault()
 
-    runQuery()
+    runQuery(question)
 
   }
 
 
-  const rows =
-    result?.data ||
-    result?.rows ||
-    result?.results ||
-    []
+  // ==========================================================
+  // CLEAR CHAT
+  // ==========================================================
+
+  const clearChat = () => {
+
+    setMessages([])
+
+    setError('')
+
+    setQuestion('')
+
+    setOpenSQL({})
+
+  }
+
+
+  // ==========================================================
+  // SQL TOGGLE
+  // ==========================================================
+
+  const toggleSQL = (id) => {
+
+    setOpenSQL((previous) => ({
+      ...previous,
+      [id]: !previous[id],
+    }))
+
+  }
 
 
   return (
     <div className="query-page">
+
+      {/* =====================================================
+          HEADER
+      ====================================================== */}
 
       <div className="page-heading">
 
@@ -428,235 +558,419 @@ export default function AIQuery() {
             MetricMind AI
           </div>
 
-          <h1>Ask MetricMind</h1>
+          <h1>AI Analytics Copilot</h1>
 
           <p>
-            Ask questions about your business data using natural language.
+            Ask questions about your business data
+            using natural language.
           </p>
 
         </div>
 
+
+        {messages.length > 0 && (
+          <button
+            type="button"
+            className="clear-chat-button"
+            onClick={clearChat}
+          >
+            <Trash2 size={17} />
+            Clear Chat
+          </button>
+        )}
+
       </div>
 
 
-      <section className="query-hero">
+      {/* =====================================================
+          WELCOME SCREEN
+      ====================================================== */}
 
-        <div className="query-icon">
-          <Sparkles size={28} />
-        </div>
+      {messages.length === 0 && !loading && (
 
-        <div className="query-input-wrap">
+        <section className="ai-welcome">
 
-          <form onSubmit={handleSubmit}>
+          <div className="welcome-icon">
+            <Sparkles size={34} />
+          </div>
 
-            <input
-              type="text"
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              placeholder="Example: Show revenue by region"
-              disabled={loading}
-            />
+          <h2>How can I help you?</h2>
 
-            <button
-              type="submit"
-              className="query-submit"
-              disabled={loading || !question.trim()}
+          <p>
+            Ask MetricMind anything about your
+            sales, revenue, profit, customers,
+            products, or business performance.
+          </p>
+
+
+          <div className="suggested-questions">
+
+            {examples.map((example) => (
+              <button
+                key={example}
+                type="button"
+                onClick={() => runQuery(example)}
+              >
+                <Sparkles size={15} />
+                {example}
+              </button>
+            ))}
+
+          </div>
+
+        </section>
+
+      )}
+
+
+      {/* =====================================================
+          CHAT AREA
+      ====================================================== */}
+
+      {messages.length > 0 && (
+
+        <section className="chat-container">
+
+          {messages.map((message) => (
+
+            <div
+              key={message.id}
+              className={`chat-message ${message.type}`}
             >
 
-              {loading ? (
-                <Loader2
-                  size={19}
-                  className="spin"
-                />
-              ) : (
-                <Send size={19} />
+              {/* USER MESSAGE */}
+
+              {message.type === 'user' && (
+
+                <div className="chat-row">
+
+                  <div className="chat-avatar user-avatar">
+                    <User size={18} />
+                  </div>
+
+                  <div className="chat-bubble user-bubble">
+
+                    <div className="chat-name">
+                      You
+                    </div>
+
+                    <div className="chat-question">
+                      {message.question}
+                    </div>
+
+                  </div>
+
+                </div>
+
               )}
 
-              {loading ? 'Analyzing...' : 'Ask'}
 
-            </button>
+              {/* AI MESSAGE */}
 
-          </form>
+              {message.type === 'assistant' && (
 
-        </div>
+                <div className="chat-row">
 
-      </section>
+                  <div className="chat-avatar ai-avatar">
+                    <Sparkles size={18} />
+                  </div>
+
+                  <div className="chat-bubble ai-bubble">
+
+                    <div className="chat-name">
+                      MetricMind
+                    </div>
 
 
-      <section className="examples">
+                    <p className="ai-answer">
+                      {message.answer}
+                    </p>
 
-        <div className="examples-heading">
-          Try an example
-        </div>
 
-        <div className="example-buttons">
+                    {/* QUERY INFO */}
 
-          {examples.map((example) => (
-            <button
-              key={example}
-              type="button"
-              onClick={() => {
-                setQuestion(example)
-                runQuery(example)
-              }}
-            >
-              {example}
-            </button>
+                    <div className="query-info">
+
+                      <span>
+                        {message.row_count || 0} rows
+                      </span>
+
+                      {message.execution_time_ms !==
+                        undefined &&
+                        message.execution_time_ms !==
+                        null && (
+                          <span>
+                            {message.execution_time_ms} ms
+                          </span>
+                        )}
+
+                    </div>
+
+
+                    {/* CHART */}
+
+                    {message.data &&
+                      message.data.length > 0 && (
+
+                        <AutomaticChart
+                          data={message.data}
+                          question={message.question}
+                        />
+
+                      )}
+
+
+                    {/* RESULT TABLE */}
+
+                    {message.data &&
+                      message.data.length > 0 && (
+
+                        <section className="panel">
+
+                          <div className="panel-heading">
+
+                            <div>
+                              <Database size={18} />
+                              Query Result
+                            </div>
+
+                            <span>
+                              {message.data.length} rows
+                            </span>
+
+                          </div>
+
+
+                          <div className="result-table-wrapper">
+
+                            <table className="result-table">
+
+                              <thead>
+
+                                <tr>
+
+                                  {Object.keys(
+                                    message.data[0]
+                                  ).map((key) => (
+                                    <th key={key}>
+                                      {key}
+                                    </th>
+                                  ))}
+
+                                </tr>
+
+                              </thead>
+
+
+                              <tbody>
+
+                                {message.data.map(
+                                  (row, index) => (
+
+                                    <tr
+                                      key={`result-row-${message.id}-${index}`}
+                                    >
+
+                                      {Object.keys(
+                                        message.data[0]
+                                      ).map((key) => (
+
+                                        <td
+                                          key={`result-cell-${message.id}-${index}-${key}`}
+                                        >
+                                          {formatValue(
+                                            row[key]
+                                          )}
+                                        </td>
+
+                                      ))}
+
+                                    </tr>
+
+                                  )
+                                )}
+
+                              </tbody>
+
+                            </table>
+
+                          </div>
+
+                        </section>
+
+                      )}
+
+
+                    {/* SQL */}
+
+                    {message.sql && (
+
+                      <section className="sql-section">
+
+                        <button
+                          type="button"
+                          className="sql-toggle"
+                          onClick={() =>
+                            toggleSQL(message.id)
+                          }
+                        >
+
+                          <span>
+                            SQL Query
+                          </span>
+
+                          {openSQL[message.id] ? (
+                            <ChevronUp size={17} />
+                          ) : (
+                            <ChevronDown size={17} />
+                          )}
+
+                        </button>
+
+
+                        {openSQL[message.id] && (
+
+                          <pre className="sql-code">
+                            {message.sql}
+                          </pre>
+
+                        )}
+
+                      </section>
+
+                    )}
+
+                  </div>
+
+                </div>
+
+              )}
+
+            </div>
+
           ))}
 
+
+          {/* =================================================
+              LOADING
+          ================================================== */}
+
+          {loading && (
+
+            <div className="chat-message assistant">
+
+              <div className="chat-row">
+
+                <div className="chat-avatar ai-avatar">
+                  <Sparkles size={18} />
+                </div>
+
+                <div className="chat-bubble ai-bubble">
+
+                  <div className="chat-name">
+                    MetricMind
+                  </div>
+
+                  <div className="thinking">
+
+                    <Loader2
+                      size={18}
+                      className="spin"
+                    />
+
+                    <span>
+                      Analyzing your business data...
+                    </span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          )}
+
+        </section>
+
+      )}
+
+
+      {/* =====================================================
+          ERROR
+      ====================================================== */}
+
+      {error && (
+
+        <div className="query-error">
+
+          <strong>Unable to answer</strong>
+
+          <span>
+            {error}
+          </span>
+
+        </div>
+
+      )}
+
+
+      {/* =====================================================
+          INPUT
+      ====================================================== */}
+
+      <section className="chat-input-area">
+
+        <form
+          className="chat-input-form"
+          onSubmit={handleSubmit}
+        >
+
+          <div className="input-icon">
+            <Sparkles size={20} />
+          </div>
+
+
+          <input
+            type="text"
+            value={question}
+            onChange={(event) =>
+              setQuestion(event.target.value)
+            }
+            placeholder="Ask MetricMind anything about your data..."
+            disabled={loading}
+          />
+
+
+          <button
+            type="submit"
+            disabled={
+              loading ||
+              !question.trim()
+            }
+          >
+
+            {loading ? (
+              <Loader2
+                size={20}
+                className="spin"
+              />
+            ) : (
+              <Send size={20} />
+            )}
+
+          </button>
+
+        </form>
+
+
+        <div className="input-hint">
+          Press Enter to ask • MetricMind analyzes
+          your business data automatically
         </div>
 
       </section>
-
-
-      {error && (
-        <div className="query-error">
-          {error}
-        </div>
-      )}
-
-
-      {result && (
-
-        <div className="results-area">
-
-          <section className="conversation">
-
-            <div className="message user">
-
-              <div className="message-avatar">
-                You
-              </div>
-
-              <div>
-                <strong>{result.question}</strong>
-              </div>
-
-            </div>
-
-
-            <div className="message assistant">
-
-              <div className="message-avatar">
-                <Sparkles size={17} />
-              </div>
-
-              <div>
-
-                <strong>MetricMind</strong>
-
-                <p>
-                  {result.answer ||
-                    result.message ||
-                    'Here is the result of your query.'}
-                </p>
-
-              </div>
-
-            </div>
-
-          </section>
-
-
-          {rows.length > 0 && (
-            <AutomaticChart
-              data={rows}
-              question={result.question}
-            />
-          )}
-
-
-          <section className="panel">
-
-            <div className="panel-heading">
-
-              <div>
-                <Database size={18} />
-                Query Result
-              </div>
-
-              <span>
-                {rows.length} rows
-              </span>
-
-            </div>
-
-
-            {rows.length > 0 ? (
-
-              <div className="result-table-wrapper">
-
-                <table className="result-table">
-
-                  <thead>
-
-                    <tr>
-
-                      {Object.keys(rows[0]).map((key) => (
-                        <th key={key}>
-                          {key}
-                        </th>
-                      ))}
-
-                    </tr>
-
-                  </thead>
-
-
-                  <tbody>
-
-                    {rows.map((row, index) => (
-
-                      <tr key={'result-row-' + index}>
-
-                        {Object.keys(rows[0]).map((key) => (
-
-                          <td key={'result-cell-' + index + '-' + key}>
-                            {formatValue(row[key])}
-                          </td>
-
-                        ))}
-
-                      </tr>
-
-                    ))}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-            ) : (
-
-              <div className="empty-results">
-                No rows were returned.
-              </div>
-
-            )}
-
-          </section>
-
-
-          {result.sql && (
-
-            <section className="panel sql-panel">
-
-              <div className="panel-heading">
-                SQL Query
-              </div>
-
-              <pre>
-                {result.sql}
-              </pre>
-
-            </section>
-
-          )}
-
-        </div>
-
-      )}
 
     </div>
   )

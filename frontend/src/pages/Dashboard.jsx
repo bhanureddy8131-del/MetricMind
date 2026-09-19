@@ -38,13 +38,20 @@ import {
   YAxis,
 } from 'recharts'
 
-import { Link, useNavigate } from 'react-router-dom'
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom'
 
-import { apiService } from '../services/api'
+import apiService from '../services/api'
 import { useTheme } from '../context/ThemeContext'
-
 import './Dashboard.css'
 
+
+/* =========================================================
+   FALLBACK DATA
+   ========================================================= */
 
 const fallbackRegion = [
   { name: 'West', value: 42000 },
@@ -80,19 +87,12 @@ const fallbackProducts = [
 ]
 
 
-function getNumber(value, fallback = 0) {
-  const number = Number(value)
-
-  if (Number.isFinite(number)) {
-    return number
-  }
-
-  return fallback
-}
-
+/* =========================================================
+   HELPERS
+   ========================================================= */
 
 function formatCurrency(value) {
-  const number = getNumber(value)
+  const number = Number(value || 0)
 
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -101,236 +101,199 @@ function formatCurrency(value) {
   }).format(number)
 }
 
-
 function formatNumber(value) {
-  return new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: 0,
-  }).format(getNumber(value))
+  return new Intl.NumberFormat('en-US').format(
+    Number(value || 0)
+  )
 }
 
-
-function getPayload(response) {
-  if (!response) {
-    return null
-  }
-
-  if (response.data !== undefined) {
-    return response.data
-  }
-
-  return response
-}
-
-
-function getRows(response) {
-  const payload = getPayload(response)
+function extractRows(response) {
+  const payload = response?.data
 
   if (Array.isArray(payload)) {
     return payload
   }
 
-  if (payload && Array.isArray(payload.data)) {
+  if (Array.isArray(payload?.data)) {
     return payload.data
   }
 
-  if (payload && Array.isArray(payload.results)) {
-    return payload.results
+  if (Array.isArray(payload?.rows)) {
+    return payload.rows
   }
 
-  if (payload && Array.isArray(payload.rows)) {
-    return payload.rows
+  if (Array.isArray(payload?.result)) {
+    return payload.result
   }
 
   return []
 }
 
+function getKpiValue(response, names = []) {
+  const payload = response?.data
 
-function normalizeRegionData(response) {
-  const rows = getRows(response)
-
-  if (!rows.length) {
-    return fallbackRegion
+  if (typeof payload === 'number') {
+    return payload
   }
 
-  const result = rows
-    .map((item) => ({
-      name:
-        item.name ||
-        item.region ||
-        item.Region ||
-        item.label ||
-        'Unknown',
-
-      value: getNumber(
-        item.value ??
-          item.revenue ??
-          item.sales ??
-          item.total ??
-          item.amount
-      ),
-    }))
-    .filter((item) => item.value > 0)
-
-  return result.length ? result : fallbackRegion
-}
-
-
-function normalizeCategoryData(response) {
-  const rows = getRows(response)
-
-  if (!rows.length) {
-    return fallbackCategory
+  if (typeof payload === 'string') {
+    const parsed = Number(payload)
+    return Number.isNaN(parsed) ? 0 : parsed
   }
 
-  const result = rows
-    .map((item) => ({
-      name:
-        item.name ||
-        item.category ||
-        item.Category ||
-        item.label ||
-        'Unknown',
+  if (payload && typeof payload === 'object') {
+    for (const name of names) {
+      if (payload[name] !== undefined) {
+        return Number(payload[name]) || 0
+      }
+    }
 
-      value: getNumber(
-        item.value ??
-          item.revenue ??
-          item.sales ??
-          item.total ??
-          item.amount
-      ),
-    }))
-    .filter((item) => item.value > 0)
+    if (Array.isArray(payload.data) && payload.data.length > 0) {
+      const row = payload.data[0]
 
-  return result.length ? result : fallbackCategory
-}
+      for (const name of names) {
+        if (row?.[name] !== undefined) {
+          return Number(row[name]) || 0
+        }
+      }
+    }
 
+    if (Array.isArray(payload.rows) && payload.rows.length > 0) {
+      const row = payload.rows[0]
 
-function normalizeTrendData(response) {
-  const rows = getRows(response)
-
-  if (!rows.length) {
-    return fallbackTrend
-  }
-
-  const result = rows
-    .map((item) => ({
-      name:
-        item.name ||
-        item.month ||
-        item.period ||
-        item.label ||
-        'Period',
-
-      revenue: getNumber(
-        item.revenue ??
-          item.sales ??
-          item.value ??
-          item.total
-      ),
-    }))
-    .filter((item) => item.revenue >= 0)
-
-  return result.length ? result : fallbackTrend
-}
-
-
-function normalizeProducts(response) {
-  const rows = getRows(response)
-
-  if (!rows.length) {
-    return fallbackProducts
-  }
-
-  const result = rows
-    .map((item) => ({
-      name:
-        item.name ||
-        item.product ||
-        item.product_name ||
-        item.Product ||
-        'Product',
-
-      value: getNumber(
-        item.value ??
-          item.profit ??
-          item.revenue ??
-          item.sales ??
-          item.total
-      ),
-    }))
-    .filter((item) => item.value > 0)
-    .slice(0, 5)
-
-  return result.length ? result : fallbackProducts
-}
-
-
-function getKpiValue(data, keys, fallback = 0) {
-  if (!data) {
-    return fallback
-  }
-
-  for (const key of keys) {
-    if (data[key] !== undefined && data[key] !== null) {
-      return getNumber(data[key], fallback)
+      for (const name of names) {
+        if (row?.[name] !== undefined) {
+          return Number(row[name]) || 0
+        }
+      }
     }
   }
 
-  return fallback
+  return 0
+}
+
+function normalizeRegion(rows) {
+  if (!rows.length) return fallbackRegion
+
+  return rows
+    .map((row) => ({
+      name:
+        row.region ??
+        row.Region ??
+        row.name ??
+        row.Name ??
+        'Unknown',
+
+      value:
+        Number(
+          row.revenue ??
+          row.Revenue ??
+          row.sales ??
+          row.Sales ??
+          row.value ??
+          row.Value ??
+          0
+        ) || 0,
+    }))
+    .filter((item) => item.name)
+}
+
+function normalizeCategory(rows) {
+  if (!rows.length) return fallbackCategory
+
+  return rows
+    .map((row) => ({
+      name:
+        row.category ??
+        row.Category ??
+        row.name ??
+        row.Name ??
+        'Unknown',
+
+      value:
+        Number(
+          row.revenue ??
+          row.Revenue ??
+          row.sales ??
+          row.Sales ??
+          row.value ??
+          row.Value ??
+          0
+        ) || 0,
+    }))
+    .filter((item) => item.name)
+}
+
+function normalizeTrend(rows) {
+  if (!rows.length) return fallbackTrend
+
+  return rows.map((row, index) => ({
+    name:
+      row.month ??
+      row.Month ??
+      row.period ??
+      row.Period ??
+      row.date ??
+      row.Date ??
+      row.name ??
+      row.Name ??
+      `Period ${index + 1}`,
+
+    revenue:
+      Number(
+        row.revenue ??
+        row.Revenue ??
+        row.sales ??
+        row.Sales ??
+        row.value ??
+        row.Value ??
+        0
+      ) || 0,
+  }))
+}
+
+function normalizeProducts(rows) {
+  if (!rows.length) return fallbackProducts
+
+  return rows
+    .map((row) => ({
+      name:
+        row.product_name ??
+        row.productName ??
+        row.Product ??
+        row.name ??
+        row.Name ??
+        'Unknown Product',
+
+      value:
+        Number(
+          row.revenue ??
+          row.Revenue ??
+          row.sales ??
+          row.Sales ??
+          row.value ??
+          row.Value ??
+          0
+        ) || 0,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5)
 }
 
 
-function KPICard({
-  icon,
-  title,
-  value,
-  change,
-  description,
-  positive = true,
-}) {
-  return (
-    <div className="metric-kpi-card">
-      <div className="metric-kpi-top">
-        <div className="metric-kpi-icon">
-          {icon}
-        </div>
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
 
-        <div className="metric-kpi-change">
-          <TrendingUp size={14} />
-          {change}
-        </div>
-      </div>
-
-      <div className="metric-kpi-title">
-        {title}
-      </div>
-
-      <div className="metric-kpi-value">
-        {value}
-      </div>
-
-      <div
-        className={
-          positive
-            ? 'metric-kpi-description positive'
-            : 'metric-kpi-description'
-        }
-      >
-        {description}
-      </div>
-    </div>
-  )
-}
-
-
-function Dashboard() {
+export default function Dashboard() {
   const navigate = useNavigate()
+  const location = useLocation()
 
   const { dark, toggleDarkMode } = useTheme()
 
   const [loading, setLoading] = useState(true)
-  const [backendOnline, setBackendOnline] = useState(false)
-  const [error, setError] = useState('')
+  const [apiOnline, setApiOnline] = useState(false)
+  const [search, setSearch] = useState('')
 
   const [kpis, setKpis] = useState({
     revenue: 0,
@@ -339,192 +302,192 @@ function Dashboard() {
     customers: 0,
   })
 
-  const [regionData, setRegionData] =
-    useState(fallbackRegion)
+  const [regionData, setRegionData] = useState(fallbackRegion)
+  const [categoryData, setCategoryData] = useState(fallbackCategory)
+  const [trendData, setTrendData] = useState(fallbackTrend)
+  const [productData, setProductData] = useState(fallbackProducts)
 
-  const [categoryData, setCategoryData] =
-    useState(fallbackCategory)
+  const [notificationOpen, setNotificationOpen] = useState(false)
 
-  const [trendData, setTrendData] =
-    useState(fallbackTrend)
+  const [copilotQuestion, setCopilotQuestion] = useState('')
 
-  const [productsData, setProductsData] =
-    useState(fallbackProducts)
-
-  const [searchOpen, setSearchOpen] =
-    useState(false)
-
-  const [searchText, setSearchText] =
-    useState('')
-
-
-  const categoryColors = [
-    '#3155ff',
-    '#7c3aed',
-    '#06b6d4',
-    '#10b981',
-    '#f59e0b',
-  ]
-
-
-  const chartTooltipStyle = useMemo(
-    () => ({
-      backgroundColor: dark
-        ? '#111827'
-        : '#ffffff',
-
-      border: dark
-        ? '1px solid #263244'
-        : '1px solid #e5e7eb',
-
-      borderRadius: '12px',
-
-      color: dark
-        ? '#ffffff'
-        : '#111827',
-    }),
-    [dark]
+  const [copilotAnswer, setCopilotAnswer] = useState(
+    'Ask me anything about your business data.'
   )
 
+  const [copilotLoading, setCopilotLoading] = useState(false)
 
-  async function loadDashboard() {
+
+  /* =======================================================
+     ACTIVE SIDEBAR
+     ======================================================= */
+
+  const isActive = (path) => {
+    if (path === '/') {
+      return location.pathname === '/'
+    }
+
+    return location.pathname.startsWith(path)
+  }
+
+
+  /* =======================================================
+     LOAD DASHBOARD
+     ======================================================= */
+
+  const loadDashboard = async () => {
     setLoading(true)
-    setError('')
 
     try {
-      let online = false
+      const healthResponse = await apiService.health()
 
-      try {
-        await apiService.health()
-        online = true
-      } catch {
-        online = false
+      if (healthResponse?.status >= 200 && healthResponse?.status < 300) {
+        setApiOnline(true)
       }
+    } catch (error) {
+      setApiOnline(false)
+    }
 
-      setBackendOnline(online)
+    try {
+      const [
+        revenueResponse,
+        profitResponse,
+        ordersResponse,
+        customersResponse,
+        regionResponse,
+        categoryResponse,
+        trendResponse,
+        productResponse,
+      ] = await Promise.allSettled([
+        apiService.query({
+          question: 'What is the total revenue?',
+        }),
 
-      const results =
-        await Promise.allSettled([
-          apiService.getDashboardKPIs(),
-          apiService.getSalesByRegion(),
-          apiService.getSalesByCategory(),
-          apiService.getSalesTrend('month'),
+        apiService.query({
+          question: 'What is the total profit?',
+        }),
 
-          typeof apiService.getTopProducts === 'function'
-            ? apiService.getTopProducts()
-            : Promise.resolve(null),
-        ])
+        apiService.query({
+          question: 'How many orders are there?',
+        }),
 
-      const kpiResult = results[0]
-      const regionResult = results[1]
-      const categoryResult = results[2]
-      const trendResult = results[3]
-      const productsResult = results[4]
+        apiService.query({
+          question: 'How many customers are there?',
+        }),
+
+        apiService.getSalesByRegion(),
+
+        apiService.getSalesByCategory(),
+
+        apiService.getSalesTrend('month'),
+
+        apiService.getTopProducts(),
+      ])
 
 
-      if (kpiResult.status === 'fulfilled') {
-        const data = getPayload(kpiResult.value)
+      /* -----------------------------------------------------
+         KPI DATA
+         ----------------------------------------------------- */
 
-        setKpis({
+      if (revenueResponse.status === 'fulfilled') {
+        setKpis((previous) => ({
+          ...previous,
           revenue: getKpiValue(
-            data,
+            revenueResponse.value,
             [
               'revenue',
               'total_revenue',
-              'totalRevenue',
               'sales',
-            ],
-            0
+              'value',
+            ]
           ),
+        }))
+      }
 
+      if (profitResponse.status === 'fulfilled') {
+        setKpis((previous) => ({
+          ...previous,
           profit: getKpiValue(
-            data,
+            profitResponse.value,
             [
               'profit',
               'total_profit',
-              'totalProfit',
-            ],
-            0
+              'value',
+            ]
           ),
+        }))
+      }
 
+      if (ordersResponse.status === 'fulfilled') {
+        setKpis((previous) => ({
+          ...previous,
           orders: getKpiValue(
-            data,
+            ordersResponse.value,
             [
               'orders',
               'total_orders',
-              'totalOrders',
-            ],
-            0
+              'order_count',
+              'count',
+              'value',
+            ]
           ),
+        }))
+      }
 
+      if (customersResponse.status === 'fulfilled') {
+        setKpis((previous) => ({
+          ...previous,
           customers: getKpiValue(
-            data,
+            customersResponse.value,
             [
               'customers',
               'total_customers',
-              'totalCustomers',
-            ],
-            0
+              'customer_count',
+              'count',
+              'value',
+            ]
           ),
-        })
+        }))
       }
 
 
-      if (regionResult.status === 'fulfilled') {
+      /* -----------------------------------------------------
+         CHART DATA
+         ----------------------------------------------------- */
+
+      if (regionResponse.status === 'fulfilled') {
         setRegionData(
-          normalizeRegionData(
-            regionResult.value
+          normalizeRegion(
+            extractRows(regionResponse.value)
           )
         )
       }
 
-
-      if (categoryResult.status === 'fulfilled') {
+      if (categoryResponse.status === 'fulfilled') {
         setCategoryData(
-          normalizeCategoryData(
-            categoryResult.value
+          normalizeCategory(
+            extractRows(categoryResponse.value)
           )
         )
       }
 
-
-      if (trendResult.status === 'fulfilled') {
+      if (trendResponse.status === 'fulfilled') {
         setTrendData(
-          normalizeTrendData(
-            trendResult.value
+          normalizeTrend(
+            extractRows(trendResponse.value)
           )
         )
       }
 
-
-      if (
-        productsResult.status === 'fulfilled' &&
-        productsResult.value
-      ) {
-        setProductsData(
+      if (productResponse.status === 'fulfilled') {
+        setProductData(
           normalizeProducts(
-            productsResult.value
+            extractRows(productResponse.value)
           )
         )
       }
-
-
-      if (!online) {
-        setError(
-          'Backend is currently offline. Showing dashboard preview data.'
-        )
-      }
-
-    } catch (err) {
-      console.error(
-        'Dashboard loading error:',
-        err
-      )
-
-      setError(
-        'Some dashboard data could not be loaded. Showing available data.'
-      )
-
+    } catch (error) {
+      console.error('Dashboard loading error:', error)
     } finally {
       setLoading(false)
     }
@@ -536,21 +499,105 @@ function Dashboard() {
   }, [])
 
 
+  /* =======================================================
+     SEARCH
+     ======================================================= */
+
+  const handleSearch = (event) => {
+    event.preventDefault()
+
+    const value = search.trim()
+
+    if (!value) return
+
+    navigate(
+      `/ai-query?q=${encodeURIComponent(value)}`
+    )
+  }
+
+
+  /* =======================================================
+     AI COPILOT
+     ======================================================= */
+
+  const askCopilot = async (question = copilotQuestion) => {
+    const cleanQuestion = question.trim()
+
+    if (!cleanQuestion) return
+
+    setCopilotLoading(true)
+    setCopilotAnswer('Analyzing your business data...')
+
+    try {
+      const response = await apiService.query({
+        question: cleanQuestion,
+      })
+
+      const answer =
+        response?.data?.answer ||
+        response?.data?.message ||
+        'I found the requested information.'
+
+      setCopilotAnswer(answer)
+    } catch (error) {
+      console.error('Copilot error:', error)
+
+      setCopilotAnswer(
+        'I could not connect to the analytics engine. Please check the backend and try again.'
+      )
+    } finally {
+      setCopilotLoading(false)
+    }
+  }
+
+
+  /* =======================================================
+     CATEGORY TOTAL
+     ======================================================= */
+
+  const categoryTotal = useMemo(() => {
+    return categoryData.reduce(
+      (total, item) => total + Number(item.value || 0),
+      0
+    )
+  }, [categoryData])
+
+
+  /* =======================================================
+     PIE COLORS
+     ======================================================= */
+
+  const pieColors = [
+    '#3155ff',
+    '#7c3aed',
+    '#06b6d4',
+    '#10b981',
+    '#f59e0b',
+  ]
+
+
+  /* =======================================================
+     RENDER
+     ======================================================= */
+
   return (
     <div
       className={
         dark
-          ? 'metric-dashboard metric-dashboard-dark'
-          : 'metric-dashboard metric-dashboard-light'
+          ? 'dashboard-shell dashboard-dark'
+          : 'dashboard-shell dashboard-light'
       }
     >
 
-      {/* SIDEBAR */}
+      {/* ===================================================
+          SIDEBAR
+          =================================================== */}
 
       <aside className="metric-sidebar">
 
-        <div className="metric-logo">
+        {/* LOGO */}
 
+        <div className="metric-logo">
           <div className="metric-logo-mark">
             M
           </div>
@@ -564,20 +611,22 @@ function Dashboard() {
               BUSINESS INTELLIGENCE
             </div>
           </div>
-
         </div>
 
+
+        {/* MAIN */}
 
         <div className="metric-sidebar-section">
           MAIN
         </div>
 
-
         <nav className="metric-sidebar-nav">
 
           <Link
             to="/"
-            className="metric-sidebar-link active"
+            className={`metric-sidebar-link ${
+              isActive('/') ? 'active' : ''
+            }`}
           >
             <Home size={18} />
             <span>Dashboard</span>
@@ -585,8 +634,21 @@ function Dashboard() {
 
 
           <Link
+            to="/analytics"
+            className={`metric-sidebar-link ${
+              isActive('/analytics') ? 'active' : ''
+            }`}
+          >
+            <BarChart3 size={18} />
+            <span>Analytics</span>
+          </Link>
+
+
+          <Link
             to="/dataset"
-            className="metric-sidebar-link"
+            className={`metric-sidebar-link ${
+              isActive('/dataset') ? 'active' : ''
+            }`}
           >
             <Database size={18} />
             <span>Dataset</span>
@@ -595,7 +657,9 @@ function Dashboard() {
 
           <Link
             to="/add-data"
-            className="metric-sidebar-link"
+            className={`metric-sidebar-link ${
+              isActive('/add-data') ? 'active' : ''
+            }`}
           >
             <Plus size={18} />
             <span>Add Data</span>
@@ -604,7 +668,9 @@ function Dashboard() {
 
           <Link
             to="/ai-query"
-            className="metric-sidebar-link"
+            className={`metric-sidebar-link ${
+              isActive('/ai-query') ? 'active' : ''
+            }`}
           >
             <Sparkles size={18} />
             <span>AI Query</span>
@@ -613,51 +679,68 @@ function Dashboard() {
         </nav>
 
 
+        {/* MANAGEMENT */}
+
         <div className="metric-sidebar-section management-title">
           MANAGEMENT
         </div>
 
-
         <nav className="metric-sidebar-nav">
 
           <Link
-            to="/settings"
-            className="metric-sidebar-link"
-          >
-            <Settings size={18} />
-            <span>Settings</span>
-          </Link>
-
-
-          <Link
             to="/reports"
-            className="metric-sidebar-link"
+            className={`metric-sidebar-link ${
+              isActive('/reports') ? 'active' : ''
+            }`}
           >
             <FileBarChart size={18} />
             <span>Reports</span>
           </Link>
 
+
+          <Link
+            to="/settings"
+            className={`metric-sidebar-link ${
+              isActive('/settings') ? 'active' : ''
+            }`}
+          >
+            <Settings size={18} />
+            <span>Settings</span>
+          </Link>
+
         </nav>
 
 
+        {/* SIDEBAR BOTTOM */}
+
         <div className="metric-sidebar-bottom">
 
-          <div className="metric-sidebar-help">
+          <div className="metric-sidebar-status">
 
-            <div className="help-icon">
-              <Activity size={18} />
+            <div className="status-icon">
+              <Activity size={15} />
             </div>
 
             <div>
-              <strong>Need help?</strong>
-              <span>Ask MetricMind AI</span>
+              <div className="status-title">
+                System Status
+              </div>
+
+              <div className="status-value">
+                <span
+                  className={
+                    apiOnline
+                      ? 'status-dot online'
+                      : 'status-dot offline'
+                  }
+                />
+
+                {apiOnline
+                  ? 'API Connected'
+                  : 'API Offline'}
+              </div>
             </div>
 
-          </div>
-
-
-          <div className="metric-sidebar-version">
-            MetricMind v1.0
           </div>
 
         </div>
@@ -665,131 +748,145 @@ function Dashboard() {
       </aside>
 
 
-      {/* MAIN AREA */}
+      {/* ===================================================
+          MAIN CONTENT
+          =================================================== */}
 
-      <div className="metric-main">
-
-
-        {/* TOP BAR */}
-
-        <header className="metric-topbar">
-
-          <div className="metric-mobile-brand">
-
-            <div className="metric-logo-mark">
-              M
-            </div>
-
-            <span>
-              METRICMIND
-            </span>
-
-          </div>
+      <main className="dashboard-main">
 
 
-          <div className="metric-search-wrapper">
+        {/* =================================================
+            TOPBAR
+            ================================================= */}
 
-            {searchOpen ? (
+        <header className="dashboard-topbar">
 
-              <div className="metric-search-expanded">
+          <form
+            className="dashboard-search"
+            onSubmit={handleSearch}
+          >
+            <Search size={18} />
 
-                <Search size={18} />
+            <input
+              type="text"
+              value={search}
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
+              placeholder="Search or ask MetricMind..."
+            />
 
-                <input
-                  autoFocus
-                  value={searchText}
-                  onChange={(event) =>
-                    setSearchText(
-                      event.target.value
-                    )
-                  }
-                  placeholder="Search dashboard..."
-                />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchOpen(false)
-                    setSearchText('')
-                  }}
-                >
-                  <X size={17} />
-                </button>
-
-              </div>
-
-            ) : (
-
+            {search && (
               <button
                 type="button"
-                className="metric-search-button"
-                onClick={() =>
-                  setSearchOpen(true)
-                }
+                className="search-clear"
+                onClick={() => setSearch('')}
               >
-                <Search size={18} />
-
-                <span>
-                  Search
-                </span>
-
-                <kbd>
-                  Ctrl K
-                </kbd>
-
+                <X size={15} />
               </button>
-
             )}
 
-          </div>
+          </form>
 
 
-          <div className="metric-topbar-actions">
+          <div className="dashboard-top-actions">
+
+            {/* THEME */}
 
             <button
               type="button"
-              className="metric-icon-button"
+              className="icon-button"
               onClick={toggleDarkMode}
-              title="Toggle theme"
+              title={
+                dark
+                  ? 'Switch to light mode'
+                  : 'Switch to dark mode'
+              }
             >
               {dark ? (
-                <Sun size={19} />
+                <Sun size={18} />
               ) : (
-                <Moon size={19} />
+                <Moon size={18} />
               )}
             </button>
 
 
-            <button
-              type="button"
-              className="metric-icon-button notification-button"
-              title="Notifications"
-            >
-              <Bell size={19} />
+            {/* NOTIFICATION */}
 
-              <span className="notification-dot" />
-            </button>
+            <div className="notification-wrapper">
+
+              <button
+                type="button"
+                className="icon-button notification-button"
+                onClick={() =>
+                  setNotificationOpen(
+                    (previous) => !previous
+                  )
+                }
+              >
+                <Bell size={18} />
+
+                <span className="notification-dot" />
+              </button>
 
 
-            <div className="metric-profile">
+              {notificationOpen && (
+                <div className="notification-popover">
 
-              <div className="metric-avatar">
+                  <div className="notification-header">
+                    <strong>
+                      Notifications
+                    </strong>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setNotificationOpen(false)
+                      }
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  <div className="notification-item">
+                    <div className="notification-item-icon">
+                      <Activity size={15} />
+                    </div>
+
+                    <div>
+                      <strong>
+                        MetricMind is running
+                      </strong>
+
+                      <p>
+                        Your dashboard is ready.
+                      </p>
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+            </div>
+
+
+            {/* PROFILE */}
+
+            <div className="dashboard-profile">
+
+              <div className="profile-avatar">
                 B
               </div>
 
-              <div className="metric-profile-text">
-
+              <div className="profile-details">
                 <strong>
-                  Bhanu
+                  MetricMind User
                 </strong>
 
                 <span>
                   Administrator
                 </span>
-
               </div>
-
-              <ChevronRight size={16} />
 
             </div>
 
@@ -798,44 +895,47 @@ function Dashboard() {
         </header>
 
 
-        {/* CONTENT */}
+        {/* =================================================
+            PAGE CONTENT
+            ================================================= */}
 
-        <main className="metric-content">
+        <section className="dashboard-content">
 
 
-          {/* PAGE HEADING */}
+          {/* PAGE HEADER */}
 
-          <section className="metric-page-heading">
+          <div className="dashboard-page-header">
 
             <div>
 
-              <div className="metric-eyebrow">
-                BUSINESS OVERVIEW
+              <div className="dashboard-eyebrow">
+                BUSINESS INTELLIGENCE
               </div>
 
               <h1>
-                Good morning <span>👋</span>
+                Dashboard
               </h1>
 
               <p>
-                Here's your business performance overview.
+                Monitor your business performance
+                from one intelligent workspace.
               </p>
 
             </div>
 
 
-            <div className="metric-heading-actions">
+            <div className="dashboard-header-actions">
 
               <div
                 className={
-                  backendOnline
-                    ? 'metric-api-status online'
-                    : 'metric-api-status offline'
+                  apiOnline
+                    ? 'api-status connected'
+                    : 'api-status disconnected'
                 }
               >
                 <span />
 
-                {backendOnline
+                {apiOnline
                   ? 'API Connected'
                   : 'Preview Mode'}
               </div>
@@ -843,158 +943,227 @@ function Dashboard() {
 
               <button
                 type="button"
-                className="metric-refresh-button"
+                className="dashboard-secondary-button"
                 onClick={loadDashboard}
                 disabled={loading}
               >
                 <RefreshCw
-                  size={17}
+                  size={16}
                   className={
                     loading ? 'spin' : ''
                   }
                 />
 
-                <span>
-                  {loading
-                    ? 'Refreshing'
-                    : 'Refresh'}
-                </span>
-              </button>
-
-
-              {/* NEW ADD DATA BUTTON */}
-
-              <button
-                type="button"
-                className="metric-add-data-button"
-                onClick={() =>
-                  navigate('/add-data')
-                }
-              >
-                <Plus size={17} />
-                Add Data
+                Refresh
               </button>
 
 
               <Link
-                to="/dataset"
-                className="metric-upload-button"
+                to="/add-data"
+                className="dashboard-primary-button"
               >
-                <Upload size={17} />
-                Upload Data
+                <Plus size={16} />
+
+                Add Data
               </Link>
 
             </div>
 
-          </section>
+          </div>
 
 
-          {/* ERROR */}
+          {/* =================================================
+              KPI CARDS
+              ================================================= */}
 
-          {error && (
-            <div className="metric-notice">
-              <Activity size={17} />
+          <div className="dashboard-kpi-grid">
 
-              <span>
-                {error}
-              </span>
-            </div>
-          )}
+            {/* REVENUE */}
 
+            <div className="dashboard-kpi-card primary">
 
-          {/* KPI CARDS */}
+              <div className="kpi-top">
 
-          <section className="metric-kpi-grid">
-
-            <KPICard
-              icon={
-                <TrendingUp size={20} />
-              }
-              title="REVENUE"
-              value={formatCurrency(
-                kpis.revenue
-              )}
-              change="+12.5%"
-              description="Compared with last period"
-            />
-
-
-            <KPICard
-              icon={
-                <BarChart3 size={20} />
-              }
-              title="PROFIT"
-              value={formatCurrency(
-                kpis.profit
-              )}
-              change="+8.2%"
-              description="Compared with last period"
-            />
-
-
-            <KPICard
-              icon={
-                <ShoppingCart size={20} />
-              }
-              title="ORDERS"
-              value={formatNumber(
-                kpis.orders
-              )}
-              change="+5.4%"
-              description="Compared with last period"
-            />
-
-
-            <KPICard
-              icon={
-                <Users size={20} />
-              }
-              title="CUSTOMERS"
-              value={formatNumber(
-                kpis.customers
-              )}
-              change="+6.8%"
-              description="Compared with last period"
-            />
-
-          </section>
-
-
-          {/* REVENUE TREND + REGION */}
-
-          <section className="metric-chart-grid large-left">
-
-            <div className="metric-chart-card">
-
-              <div className="metric-chart-header">
-
-                <div>
-
-                  <div className="metric-chart-title">
-                    REVENUE TREND
-                  </div>
-
-                  <div className="metric-chart-subtitle">
-                    Monthly revenue performance
-                  </div>
-
+                <div className="kpi-icon">
+                  <TrendingUp size={19} />
                 </div>
 
-                <div className="metric-chart-badge">
-                  <TrendingUp size={14} />
-                  Revenue
+                <span className="kpi-label">
+                  TOTAL REVENUE
+                </span>
+
+              </div>
+
+              <div className="kpi-value">
+                {loading
+                  ? '—'
+                  : formatCurrency(kpis.revenue)}
+              </div>
+
+              <div className="kpi-footer">
+                <span className="kpi-positive">
+                  <TrendingUp size={13} />
+                  Business performance
+                </span>
+
+                <span className="kpi-period">
+                  Current
+                </span>
+              </div>
+
+            </div>
+
+
+            {/* PROFIT */}
+
+            <div className="dashboard-kpi-card">
+
+              <div className="kpi-top">
+
+                <div className="kpi-icon green">
+                  <Activity size={19} />
+                </div>
+
+                <span className="kpi-label">
+                  TOTAL PROFIT
+                </span>
+
+              </div>
+
+              <div className="kpi-value">
+                {loading
+                  ? '—'
+                  : formatCurrency(kpis.profit)}
+              </div>
+
+              <div className="kpi-footer">
+                <span className="kpi-positive">
+                  <TrendingUp size={13} />
+                  Profit generated
+                </span>
+
+                <span className="kpi-period">
+                  Current
+                </span>
+              </div>
+
+            </div>
+
+
+            {/* ORDERS */}
+
+            <div className="dashboard-kpi-card">
+
+              <div className="kpi-top">
+
+                <div className="kpi-icon purple">
+                  <ShoppingCart size={19} />
+                </div>
+
+                <span className="kpi-label">
+                  TOTAL ORDERS
+                </span>
+
+              </div>
+
+              <div className="kpi-value">
+                {loading
+                  ? '—'
+                  : formatNumber(kpis.orders)}
+              </div>
+
+              <div className="kpi-footer">
+                <span className="kpi-positive">
+                  <ShoppingCart size={13} />
+                  Orders processed
+                </span>
+
+                <span className="kpi-period">
+                  Current
+                </span>
+              </div>
+
+            </div>
+
+
+            {/* CUSTOMERS */}
+
+            <div className="dashboard-kpi-card">
+
+              <div className="kpi-top">
+
+                <div className="kpi-icon cyan">
+                  <Users size={19} />
+                </div>
+
+                <span className="kpi-label">
+                  CUSTOMERS
+                </span>
+
+              </div>
+
+              <div className="kpi-value">
+                {loading
+                  ? '—'
+                  : formatNumber(kpis.customers)}
+              </div>
+
+              <div className="kpi-footer">
+                <span className="kpi-positive">
+                  <Users size={13} />
+                  Unique customers
+                </span>
+
+                <span className="kpi-period">
+                  Current
+                </span>
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              CHART ROW
+              ================================================= */}
+
+          <div className="dashboard-chart-grid">
+
+
+            {/* REVENUE TREND */}
+
+            <section className="dashboard-panel revenue-panel">
+
+              <div className="panel-header">
+
+                <div>
+                  <span className="panel-eyebrow">
+                    PERFORMANCE
+                  </span>
+
+                  <h2>
+                    Revenue Trend
+                  </h2>
+
+                  <p>
+                    Monthly revenue movement
+                  </p>
+                </div>
+
+                <div className="panel-icon">
+                  <TrendingUp size={18} />
                 </div>
 
               </div>
 
 
-              <div className="metric-chart-area">
+              <div className="chart-container">
 
                 <ResponsiveContainer
                   width="100%"
                   height="100%"
                 >
-
                   <LineChart
                     data={trendData}
                     margin={{
@@ -1010,8 +1179,8 @@ function Dashboard() {
                       vertical={false}
                       stroke={
                         dark
-                          ? '#273449'
-                          : '#e9edf5'
+                          ? '#263247'
+                          : '#e8edf5'
                       }
                     />
 
@@ -1020,10 +1189,10 @@ function Dashboard() {
                       axisLine={false}
                       tickLine={false}
                       tick={{
+                        fontSize: 11,
                         fill: dark
-                          ? '#8d99ae'
+                          ? '#98a2b3'
                           : '#667085',
-                        fontSize: 12,
                       }}
                     />
 
@@ -1031,10 +1200,10 @@ function Dashboard() {
                       axisLine={false}
                       tickLine={false}
                       tick={{
+                        fontSize: 10,
                         fill: dark
-                          ? '#8d99ae'
+                          ? '#98a2b3'
                           : '#667085',
-                        fontSize: 12,
                       }}
                       tickFormatter={(value) =>
                         `$${Math.round(
@@ -1044,13 +1213,9 @@ function Dashboard() {
                     />
 
                     <Tooltip
-                      contentStyle={
-                        chartTooltipStyle
+                      formatter={(value) =>
+                        formatCurrency(value)
                       }
-                      formatter={(value) => [
-                        formatCurrency(value),
-                        'Revenue',
-                      ]}
                     />
 
                     <Line
@@ -1058,52 +1223,56 @@ function Dashboard() {
                       dataKey="revenue"
                       stroke="#3155ff"
                       strokeWidth={3}
-                      dot={false}
+                      dot={{
+                        r: 3,
+                        fill: '#3155ff',
+                      }}
                       activeDot={{
                         r: 6,
-                        fill: '#3155ff',
                       }}
                     />
 
                   </LineChart>
-
                 </ResponsiveContainer>
 
               </div>
 
-            </div>
+            </section>
 
 
-            <div className="metric-chart-card">
+            {/* REGION */}
 
-              <div className="metric-chart-header">
+            <section className="dashboard-panel">
+
+              <div className="panel-header">
 
                 <div>
+                  <span className="panel-eyebrow">
+                    GEOGRAPHY
+                  </span>
 
-                  <div className="metric-chart-title">
-                    REVENUE BY REGION
-                  </div>
+                  <h2>
+                    Revenue by Region
+                  </h2>
 
-                  <div className="metric-chart-subtitle">
-                    Sales distribution
-                  </div>
-
+                  <p>
+                    Regional performance
+                  </p>
                 </div>
 
-                <div className="metric-chart-mini-icon">
+                <div className="panel-icon">
                   <BarChart3 size={18} />
                 </div>
 
               </div>
 
 
-              <div className="metric-chart-area">
+              <div className="chart-container">
 
                 <ResponsiveContainer
                   width="100%"
                   height="100%"
                 >
-
                   <BarChart
                     data={regionData}
                     layout="vertical"
@@ -1120,38 +1289,46 @@ function Dashboard() {
                       horizontal={false}
                       stroke={
                         dark
-                          ? '#273449'
-                          : '#e9edf5'
+                          ? '#263247'
+                          : '#e8edf5'
                       }
                     />
 
                     <XAxis
                       type="number"
-                      hide
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{
+                        fontSize: 10,
+                        fill: dark
+                          ? '#98a2b3'
+                          : '#667085',
+                      }}
+                      tickFormatter={(value) =>
+                        `$${Math.round(
+                          value / 1000
+                        )}k`
+                      }
                     />
 
                     <YAxis
-                      dataKey="name"
                       type="category"
+                      dataKey="name"
                       axisLine={false}
                       tickLine={false}
                       width={65}
                       tick={{
+                        fontSize: 11,
                         fill: dark
                           ? '#d0d5dd'
-                          : '#667085',
-                        fontSize: 12,
+                          : '#344054',
                       }}
                     />
 
                     <Tooltip
-                      contentStyle={
-                        chartTooltipStyle
+                      formatter={(value) =>
+                        formatCurrency(value)
                       }
-                      formatter={(value) => [
-                        formatCurrency(value),
-                        'Revenue',
-                      ]}
                     />
 
                     <Bar
@@ -1163,56 +1340,61 @@ function Dashboard() {
                         7,
                         0,
                       ]}
-                      barSize={22}
+                      barSize={20}
                     />
 
                   </BarChart>
-
                 </ResponsiveContainer>
 
               </div>
 
-            </div>
+            </section>
 
-          </section>
+          </div>
 
 
-          {/* CATEGORY + PRODUCTS */}
+          {/* =================================================
+              SECOND CHART ROW
+              ================================================= */}
 
-          <section className="metric-chart-grid large-left">
+          <div className="dashboard-chart-grid">
 
-            <div className="metric-chart-card">
 
-              <div className="metric-chart-header">
+            {/* CATEGORY */}
+
+            <section className="dashboard-panel">
+
+              <div className="panel-header">
 
                 <div>
+                  <span className="panel-eyebrow">
+                    PRODUCT MIX
+                  </span>
 
-                  <div className="metric-chart-title">
-                    REVENUE BY CATEGORY
-                  </div>
+                  <h2>
+                    Revenue by Category
+                  </h2>
 
-                  <div className="metric-chart-subtitle">
+                  <p>
                     Category contribution
-                  </div>
-
+                  </p>
                 </div>
 
-                <div className="metric-chart-mini-icon">
+                <div className="panel-icon purple">
                   <PieChart size={18} />
                 </div>
 
               </div>
 
 
-              <div className="metric-category-layout">
+              <div className="category-chart-wrapper">
 
-                <div className="metric-pie">
+                <div className="category-donut">
 
                   <ResponsiveContainer
                     width="100%"
                     height="100%"
                   >
-
                     <RechartsPieChart>
 
                       <Pie
@@ -1221,19 +1403,19 @@ function Dashboard() {
                         nameKey="name"
                         cx="50%"
                         cy="50%"
-                        innerRadius={55}
-                        outerRadius={88}
+                        innerRadius={65}
+                        outerRadius={95}
                         paddingAngle={3}
                       >
 
                         {categoryData.map(
-                          (_, index) => (
+                          (entry, index) => (
                             <Cell
-                              key={index}
+                              key={`category-${index}`}
                               fill={
-                                categoryColors[
+                                pieColors[
                                   index %
-                                    categoryColors.length
+                                  pieColors.length
                                 ]
                               }
                             />
@@ -1242,126 +1424,157 @@ function Dashboard() {
 
                       </Pie>
 
-                      <Tooltip
-                        contentStyle={
-                          chartTooltipStyle
-                        }
-                      />
+                      <Tooltip />
 
                     </RechartsPieChart>
-
                   </ResponsiveContainer>
+
+                  <div className="donut-center">
+
+                    <strong>
+                      {categoryData.length}
+                    </strong>
+
+                    <span>
+                      Categories
+                    </span>
+
+                  </div>
 
                 </div>
 
 
-                <div className="metric-category-list">
+                <div className="category-legend">
 
                   {categoryData.map(
-                    (item, index) => (
+                    (item, index) => {
 
-                      <div
-                        className="metric-category-item"
-                        key={
-                          item.name +
-                          index
-                        }
-                      >
+                      const percentage =
+                        categoryTotal > 0
+                          ? (
+                              (Number(item.value) /
+                                categoryTotal) *
+                              100
+                            ).toFixed(0)
+                          : 0
 
-                        <div className="metric-category-name">
+                      return (
+                        <div
+                          className="legend-item"
+                          key={`${item.name}-${index}`}
+                        >
 
-                          <span
-                            className="category-dot"
-                            style={{
-                              background:
-                                categoryColors[
-                                  index %
-                                    categoryColors.length
-                                ],
-                            }}
-                          />
+                          <div className="legend-left">
 
-                          {item.name}
+                            <span
+                              className="legend-dot"
+                              style={{
+                                background:
+                                  pieColors[
+                                    index %
+                                    pieColors.length
+                                  ],
+                              }}
+                            />
+
+                            <span>
+                              {item.name}
+                            </span>
+
+                          </div>
+
+                          <strong>
+                            {percentage}%
+                          </strong>
 
                         </div>
-
-                        <strong>
-                          {formatNumber(
-                            item.value
-                          )}
-                        </strong>
-
-                      </div>
-
-                    )
+                      )
+                    }
                   )}
 
                 </div>
 
               </div>
 
-            </div>
+            </section>
 
 
-            <div className="metric-chart-card">
+            {/* TOP PRODUCTS */}
 
-              <div className="metric-chart-header">
+            <section className="dashboard-panel">
+
+              <div className="panel-header">
 
                 <div>
+                  <span className="panel-eyebrow">
+                    TOP PERFORMERS
+                  </span>
 
-                  <div className="metric-chart-title">
-                    TOP PRODUCTS
-                  </div>
+                  <h2>
+                    Top Products
+                  </h2>
 
-                  <div className="metric-chart-subtitle">
-                    Best performing products
-                  </div>
-
+                  <p>
+                    Highest revenue products
+                  </p>
                 </div>
 
-                <div className="metric-chart-mini-icon">
+                <div className="panel-icon orange">
                   <ShoppingCart size={18} />
                 </div>
 
               </div>
 
 
-              <div className="metric-products-list">
+              <div className="product-list">
 
-                {productsData.map(
+                {productData.map(
                   (product, index) => (
 
                     <div
-                      className="metric-product-row"
-                      key={
-                        product.name +
-                        index
-                      }
+                      className="product-row"
+                      key={`${product.name}-${index}`}
                     >
 
-                      <div className="metric-product-rank">
-                        {String(
-                          index + 1
-                        ).padStart(2, '0')}
+                      <div className="product-rank">
+                        {index + 1}
                       </div>
 
-                      <div className="metric-product-info">
+                      <div className="product-info">
 
-                        <strong>
+                        <div className="product-name">
                           {product.name}
-                        </strong>
+                        </div>
 
-                        <span>
-                          Top performing product
-                        </span>
+                        <div className="product-progress">
+
+                          <span
+                            style={{
+                              width: `${Math.min(
+                                100,
+                                Math.max(
+                                  8,
+                                  (product.value /
+                                    Math.max(
+                                      productData[0]
+                                        ?.value || 1,
+                                      1
+                                    )) *
+                                    100
+                                )
+                              )}%`,
+                            }}
+                          />
+
+                        </div>
 
                       </div>
 
-                      <div className="metric-product-value">
+                      <strong className="product-value">
                         {formatCurrency(
                           product.value
                         )}
-                      </div>
+                      </strong>
 
                     </div>
 
@@ -1370,67 +1583,217 @@ function Dashboard() {
 
               </div>
 
+            </section>
+
+          </div>
+
+
+          {/* =================================================
+              AI COPILOT
+              ================================================= */}
+
+          <section className="dashboard-copilot">
+
+            <div className="copilot-glow" />
+
+            <div className="copilot-icon">
+              <Sparkles size={24} />
+            </div>
+
+
+            <div className="copilot-content">
+
+              <span className="copilot-eyebrow">
+                AI ANALYTICS COPILOT
+              </span>
+
+              <h2>
+                Ask MetricMind anything
+              </h2>
+
+              <p>
+                Turn your business data into
+                instant insights using natural
+                language.
+              </p>
+
+
+              <form
+                className="copilot-form"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  askCopilot()
+                }}
+              >
+
+                <input
+                  value={copilotQuestion}
+                  onChange={(event) =>
+                    setCopilotQuestion(
+                      event.target.value
+                    )
+                  }
+                  placeholder="e.g. Show me the highest revenue region"
+                />
+
+                <button
+                  type="submit"
+                  disabled={
+                    copilotLoading ||
+                    !copilotQuestion.trim()
+                  }
+                >
+                  {copilotLoading ? (
+                    <RefreshCw
+                      size={16}
+                      className="spin"
+                    />
+                  ) : (
+                    <Sparkles size={16} />
+                  )}
+
+                  Ask AI
+                </button>
+
+              </form>
+
+
+              {copilotAnswer && (
+                <div className="copilot-answer">
+
+                  <div className="answer-label">
+                    MetricMind
+                  </div>
+
+                  <div className="answer-text">
+                    {copilotAnswer}
+                  </div>
+
+                </div>
+              )}
+
             </div>
 
           </section>
 
 
-          {/* AI COPILOT */}
+          {/* =================================================
+              QUICK ACTIONS
+              ================================================= */}
 
-          <section className="metric-ai-card">
+          <section className="quick-actions-section">
 
-            <div className="metric-ai-glow" />
-
-            <div className="metric-ai-header">
-
-              <div className="metric-ai-icon">
-                <Sparkles size={22} />
-              </div>
+            <div className="quick-actions-heading">
 
               <div>
+                <span className="panel-eyebrow">
+                  WORKSPACE
+                </span>
 
-                <div className="metric-ai-title">
-                  ASK METRICMIND
-                </div>
-
-                <div className="metric-ai-subtitle">
-                  Ask questions about your business data
-                </div>
-
+                <h2>
+                  Quick Actions
+                </h2>
               </div>
 
             </div>
 
 
-            <div className="metric-ai-input-wrapper">
+            <div className="quick-actions-grid">
 
-              <input
-                type="text"
-                placeholder="What is our total revenue?"
-              />
+
+              <Link
+                to="/add-data"
+                className="quick-action-card"
+              >
+
+                <div className="quick-action-icon blue">
+                  <Plus size={19} />
+                </div>
+
+                <div>
+                  <strong>
+                    Add Business Data
+                  </strong>
+
+                  <span>
+                    Enter new business records
+                  </span>
+                </div>
+
+                <ChevronRight size={17} />
+
+              </Link>
+
+
+              <Link
+                to="/dataset"
+                className="quick-action-card"
+              >
+
+                <div className="quick-action-icon purple">
+                  <Upload size={19} />
+                </div>
+
+                <div>
+                  <strong>
+                    Upload Dataset
+                  </strong>
+
+                  <span>
+                    Import CSV or Excel data
+                  </span>
+                </div>
+
+                <ChevronRight size={17} />
+
+              </Link>
+
 
               <Link
                 to="/ai-query"
-                className="metric-ai-submit"
+                className="quick-action-card"
               >
-                <ChevronRight size={21} />
+
+                <div className="quick-action-icon cyan">
+                  <Sparkles size={19} />
+                </div>
+
+                <div>
+                  <strong>
+                    AI Analysis
+                  </strong>
+
+                  <span>
+                    Ask questions about data
+                  </span>
+                </div>
+
+                <ChevronRight size={17} />
+
               </Link>
 
-            </div>
 
+              <Link
+                to="/reports"
+                className="quick-action-card"
+              >
 
-            <div className="metric-ai-suggestions">
+                <div className="quick-action-icon green">
+                  <FileBarChart size={19} />
+                </div>
 
-              <Link to="/ai-query">
-                What are our top products?
-              </Link>
+                <div>
+                  <strong>
+                    Generate Report
+                  </strong>
 
-              <Link to="/ai-query">
-                Which region has the highest sales?
-              </Link>
+                  <span>
+                    Create business reports
+                  </span>
+                </div>
 
-              <Link to="/ai-query">
-                Show monthly revenue
+                <ChevronRight size={17} />
+
               </Link>
 
             </div>
@@ -1438,157 +1801,44 @@ function Dashboard() {
           </section>
 
 
-          {/* QUICK ACTIONS */}
+          {/* =================================================
+              FOOTER
+              ================================================= */}
 
-          <section className="metric-quick-actions">
+          <footer className="dashboard-footer">
 
+            <div>
+              <strong>
+                MetricMind
+              </strong>
 
-            {/* ADD DATA */}
+              <span>
+                AI-powered business intelligence
+              </span>
+            </div>
 
-            <button
-              type="button"
-              className="metric-quick-action"
-              onClick={() =>
-                navigate('/add-data')
-              }
-            >
+            <div className="footer-status">
 
-              <div className="quick-action-icon blue">
-                <Plus size={19} />
-              </div>
+              <span
+                className={
+                  apiOnline
+                    ? 'status-dot online'
+                    : 'status-dot offline'
+                }
+              />
 
-              <div>
+              {apiOnline
+                ? 'All systems operational'
+                : 'Backend unavailable'}
 
-                <strong>
-                  Add Business Data
-                </strong>
-
-                <span>
-                  Enter a new sales record
-                </span>
-
-              </div>
-
-              <ChevronRight size={17} />
-
-            </button>
-
-
-            {/* UPLOAD DATA */}
-
-            <Link
-              to="/dataset"
-              className="metric-quick-action"
-            >
-
-              <div className="quick-action-icon blue">
-                <Upload size={19} />
-              </div>
-
-              <div>
-
-                <strong>
-                  Upload Dataset
-                </strong>
-
-                <span>
-                  Add new business data
-                </span>
-
-              </div>
-
-              <ChevronRight size={17} />
-
-            </Link>
-
-
-            {/* AI ANALYSIS */}
-
-            <Link
-              to="/ai-query"
-              className="metric-quick-action"
-            >
-
-              <div className="quick-action-icon purple">
-                <Sparkles size={19} />
-              </div>
-
-              <div>
-
-                <strong>
-                  AI Analysis
-                </strong>
-
-                <span>
-                  Ask questions about data
-                </span>
-
-              </div>
-
-              <ChevronRight size={17} />
-
-            </Link>
-
-
-            {/* REPORT */}
-
-            <Link
-              to="/reports"
-              className="metric-quick-action"
-            >
-
-              <div className="quick-action-icon green">
-                <FileBarChart size={19} />
-              </div>
-
-              <div>
-
-                <strong>
-                  Generate Report
-                </strong>
-
-                <span>
-                  Create business report
-                </span>
-
-              </div>
-
-              <ChevronRight size={17} />
-
-            </Link>
-
-          </section>
-
-
-          {/* FOOTER */}
-
-          <footer className="metric-dashboard-footer">
-
-            <span>
-              © 2026 MetricMind
-            </span>
-
-            <span>
-              AI-Powered Business Intelligence
-            </span>
-
-            <span className="footer-status">
-
-              <span />
-
-              System operational
-
-            </span>
+            </div>
 
           </footer>
 
-        </main>
+        </section>
 
-      </div>
+      </main>
 
     </div>
   )
 }
-
-
-export default Dashboard
