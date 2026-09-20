@@ -1153,3 +1153,217 @@
       margin-left: 0;
     }
   }
+  /* =========================================================
+   NEW SETTINGS FUNCTIONALITY
+   ========================================================= */
+
+.settings-color-option {
+  cursor: pointer;
+  background: #ffffff;
+  color: #445069;
+  transition: all 0.2s ease;
+}
+
+.settings-color-option:hover {
+  transform: translateY(-2px);
+  border-color: #9aa9c2;
+  box-shadow: 0 5px 15px rgba(31, 41, 55, 0.08);
+}
+
+.settings-accent-selected {
+  border-color: #2563eb !important;
+  background: #eff6ff !important;
+  color: #2563eb !important;
+  box-shadow: 0 5px 15px rgba(37, 99, 235, 0.12);
+}
+
+.metric-settings-dark .settings-color-option {
+  background: #151f34;
+  color: #dce3f0;
+}
+
+.metric-settings-dark .settings-accent-selected {
+  background: #172b50 !important;
+  border-color: #4f7cff !important;
+  color: #76a0ff !important;
+}
+
+.settings-color-option svg {
+  margin-left: 2px;
+}
+
+.settings-security-card .settings-outline-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.settings-connected {
+  white-space: nowrap;
+}
+
+/* =========================================================
+   ACCENT SYSTEM
+   ========================================================= */
+
+:root[data-accent="cobalt"] {
+  --metric-accent: #2563eb;
+  --metric-accent-secondary: #4f46e5;
+}
+
+:root[data-accent="purple"] {
+  --metric-accent: #7c3aed;
+  --metric-accent-secondary: #a855f7;
+}
+
+:root[data-accent="emerald"] {
+  --metric-accent: #059669;
+  --metric-accent-secondary: #10b981;
+}
+
+:root[data-accent="orange"] {
+  --metric-accent: #ea580c;
+  --metric-accent-secondary: #f97316;
+}
+
+:root[data-accent="cyan"] {
+  --metric-accent: #0891b2;
+  --metric-accent-secondary: #06b6d4;
+}
+
+/* Selected save button follows accent */
+
+.settings-save-button {
+  background: linear-gradient(
+    135deg,
+    var(--metric-accent),
+    var(--metric-accent-secondary)
+  );
+}
+
+/* Selected navigation follows accent */
+
+.settings-nav-active {
+  background: linear-gradient(
+    135deg,
+    var(--metric-accent),
+    var(--metric-accent-secondary)
+  );
+}
+
+/* Dataset button follows accent */
+
+.settings-dataset-button {
+  background: linear-gradient(
+    135deg,
+    var(--metric-accent),
+    var(--metric-accent-secondary)
+  );
+}
+
+/* Avatar follows accent */
+
+.settings-user-avatar,
+.settings-profile-avatar,
+.settings-large-avatar {
+  background: linear-gradient(
+    135deg,
+    var(--metric-accent),
+    var(--metric-accent-secondary)
+  );
+}
+
+/* Logo follows accent */
+
+.settings-logo {
+  background: linear-gradient(
+    135deg,
+    var(--metric-accent),
+    var(--metric-accent-secondary)
+  );
+}
+
+/* Mobile improvements */
+
+@media (max-width: 850px) {
+  .settings-sidebar {
+    position: relative;
+    width: 100%;
+  }
+
+  .settings-main-nav {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .settings-brand {
+    padding-bottom: 20px;
+  }
+}
+
+@media (max-width: 500px) {
+  .settings-main-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-title-row {
+    align-items: flex-start;
+  }
+
+  .settings-title-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .settings-heading h2 {
+    font-size: 18px;
+  }
+
+  .settings-heading p {
+    font-size: 11px;
+  }
+
+  .settings-panel-header {
+    padding: 18px;
+  }
+
+  .settings-profile-cover {
+    margin: 18px;
+  }
+
+  .settings-form-grid {
+    padding: 0 18px;
+  }
+
+  .settings-save-row {
+    padding: 20px 18px;
+  }
+
+  .settings-theme-grid {
+    padding: 18px;
+  }
+
+  .settings-color-section {
+    margin: 0 18px 18px;
+  }
+
+  .settings-toggle-list {
+    padding: 8px 18px 18px;
+  }
+
+  .settings-security-card {
+    margin: 15px 18px;
+  }
+
+  .settings-data-banner {
+    margin: 18px;
+  }
+
+  .settings-data-grid {
+    padding: 0 18px;
+  }
+
+  .settings-dataset-button {
+    margin: 18px;
+  }
+}

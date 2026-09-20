@@ -1,451 +1,762 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+
 import {
+  Activity,
   BarChart3,
   Filter,
-  RefreshCcw,
+  PieChart,
+  RefreshCw,
   TrendingUp,
   DollarSign,
   ShoppingCart,
   Users,
-  Package,
-  ArrowUpRight,
-  MessageSquare,
-  Loader2,
 } from 'lucide-react'
 
 import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  BarChart,
   Bar,
-  PieChart,
-  Pie,
-  Cell,
+  BarChart,
   CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart as RechartsPieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  Legend,
 } from 'recharts'
 
 import { apiService } from '../services/api'
+import { useTheme } from '../context/ThemeContext'
+
 import './Analytics.css'
 
-const COLORS = ['#3155ff', '#7c3aed', '#06b6d4', '#10b981', '#f59e0b']
 
-export default function Analytics() {
-  const [metric, setMetric] = useState('Revenue')
-  const [region, setRegion] = useState('All regions')
-  const [category, setCategory] = useState('All categories')
+const COLORS = [
+  '#3155ff',
+  '#7c3aed',
+  '#06b6d4',
+  '#10b981',
+  '#f59e0b',
+]
 
-  const [loading, setLoading] = useState(false)
+
+function getPayload(response) {
+  if (!response) return null
+
+  if (response.data !== undefined) {
+    return response.data
+  }
+
+  return response
+}
+
+
+function getRows(response) {
+  const payload = getPayload(response)
+
+  if (Array.isArray(payload)) {
+    return payload
+  }
+
+  if (payload?.data && Array.isArray(payload.data)) {
+    return payload.data
+  }
+
+  if (payload?.results && Array.isArray(payload.results)) {
+    return payload.results
+  }
+
+  if (payload?.rows && Array.isArray(payload.rows)) {
+    return payload.rows
+  }
+
+  return []
+}
+
+
+function getNumber(value) {
+  const number = Number(value)
+
+  return Number.isFinite(number) ? number : 0
+}
+
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(getNumber(value))
+}
+
+
+function formatNumber(value) {
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 0,
+  }).format(getNumber(value))
+}
+
+
+function normalizeRegionData(response) {
+  const rows = getRows(response)
+
+  return rows
+    .map((item) => ({
+      name:
+        item.name ||
+        item.region ||
+        item.Region ||
+        item.label ||
+        'Unknown',
+
+      value: getNumber(
+        item.value ??
+          item.revenue ??
+          item.sales ??
+          item.total ??
+          item.amount
+      ),
+    }))
+    .filter((item) => item.value >= 0)
+}
+
+
+function normalizeCategoryData(response) {
+  const rows = getRows(response)
+
+  return rows
+    .map((item) => ({
+      name:
+        item.name ||
+        item.category ||
+        item.Category ||
+        item.label ||
+        'Unknown',
+
+      value: getNumber(
+        item.value ??
+          item.revenue ??
+          item.sales ??
+          item.total ??
+          item.amount
+      ),
+    }))
+    .filter((item) => item.value >= 0)
+}
+
+
+function normalizeTrendData(response) {
+  const rows = getRows(response)
+
+  return rows
+    .map((item) => ({
+      name:
+        item.name ||
+        item.month ||
+        item.period ||
+        item.label ||
+        'Period',
+
+      revenue: getNumber(
+        item.revenue ??
+          item.sales ??
+          item.value ??
+          item.total
+      ),
+    }))
+    .filter((item) => item.revenue >= 0)
+}
+
+
+function getKpi(data, keys) {
+  if (!data) return 0
+
+  for (const key of keys) {
+    if (
+      data[key] !== undefined &&
+      data[key] !== null
+    ) {
+      return getNumber(data[key])
+    }
+  }
+
+  return 0
+}
+
+
+function StatCard({
+  icon,
+  title,
+  value,
+  subtitle,
+}) {
+  return (
+    <div className="analytics-stat-card">
+
+      <div className="analytics-stat-top">
+
+        <div className="analytics-stat-icon">
+          {icon}
+        </div>
+
+        <div className="analytics-stat-live">
+          <span />
+          Live
+        </div>
+
+      </div>
+
+      <div className="analytics-stat-title">
+        {title}
+      </div>
+
+      <div className="analytics-stat-value">
+        {value}
+      </div>
+
+      <div className="analytics-stat-subtitle">
+        {subtitle}
+      </div>
+
+    </div>
+  )
+}
+
+
+function Analytics() {
+
+  const { dark } = useTheme()
+
+  const [loading, setLoading] = useState(true)
+
   const [error, setError] = useState('')
 
   const [kpis, setKpis] = useState({
-    revenue: null,
-    profit: null,
-    orders: null,
-    customers: null,
+    revenue: 0,
+    profit: 0,
+    orders: 0,
+    customers: 0,
   })
 
-  const [trendData, setTrendData] = useState([])
   const [regionData, setRegionData] = useState([])
+
   const [categoryData, setCategoryData] = useState([])
 
-  const formatCurrency = (value) => {
-    if (value === null || value === undefined || value === '') {
-      return '—'
-    }
+  const [trendData, setTrendData] = useState([])
 
-    const number = Number(value)
+  const [metric, setMetric] = useState('Revenue')
 
-    if (Number.isNaN(number)) {
-      return '—'
-    }
+  const [regionFilter, setRegionFilter] =
+    useState('All regions')
 
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(number)
-  }
+  const [categoryFilter, setCategoryFilter] =
+    useState('All categories')
 
-  const formatNumber = (value) => {
-    if (value === null || value === undefined || value === '') {
-      return '—'
-    }
 
-    const number = Number(value)
+  const tooltipStyle = useMemo(
+    () => ({
+      backgroundColor: dark
+        ? '#111827'
+        : '#ffffff',
 
-    if (Number.isNaN(number)) {
-      return '—'
-    }
+      border: dark
+        ? '1px solid #263244'
+        : '1px solid #e5e7eb',
 
-    return new Intl.NumberFormat('en-IN').format(number)
-  }
+      borderRadius: '12px',
 
-  const extractRows = (response) => {
-    const data = response?.data
+      color: dark
+        ? '#ffffff'
+        : '#111827',
 
-    if (Array.isArray(data)) {
-      return data
-    }
+      boxShadow:
+        '0 10px 30px rgba(20, 35, 90, 0.12)',
+    }),
+    [dark]
+  )
 
-    if (Array.isArray(data?.data)) {
-      return data.data
-    }
 
-    if (Array.isArray(data?.rows)) {
-      return data.rows
-    }
+  async function loadAnalytics() {
 
-    if (Array.isArray(data?.result)) {
-      return data.result
-    }
-
-    return []
-  }
-
-  const runAnalyticsQuery = async (question) => {
-    const response = await apiService.query({
-      question,
-    })
-
-    return extractRows(response)
-  }
-
-  const loadAnalytics = async () => {
     setLoading(true)
     setError('')
 
     try {
-      const [
-        revenueResponse,
-        profitResponse,
-        ordersResponse,
-        customersResponse,
-        trendResponse,
-        regionResponse,
-        categoryResponse,
-      ] = await Promise.all([
-        apiService.query({
-          question: 'What is the total revenue?',
-        }),
-        apiService.query({
-          question: 'What is the total profit?',
-        }),
-        apiService.query({
-          question: 'How many orders are there?',
-        }),
-        apiService.query({
-          question: 'How many customers are there?',
-        }),
-        apiService.query({
-          question: 'Show monthly revenue trend',
-        }),
-        apiService.query({
-          question: 'Show revenue by region',
-        }),
-        apiService.query({
-          question: 'Show revenue by category',
-        }),
-      ])
 
-      const getAnswerNumber = (response) => {
-        const answer = response?.data?.answer
+      const results =
+        await Promise.allSettled([
+          apiService.getDashboardKPIs(),
+          apiService.getSalesByRegion(),
+          apiService.getSalesByCategory(),
+          apiService.getSalesTrend('month'),
+        ])
 
-        if (typeof answer === 'number') {
-          return answer
-        }
 
-        const rows = extractRows(response)
+      if (results[0].status === 'fulfilled') {
 
-        if (rows.length > 0) {
-          const firstRow = rows[0]
-          const firstValue = Object.values(firstRow || {})[0]
+        const data =
+          getPayload(results[0].value)
 
-          if (firstValue !== undefined) {
-            const parsed = Number(firstValue)
+        setKpis({
+          revenue: getKpi(data, [
+            'revenue',
+            'total_revenue',
+            'totalRevenue',
+            'sales',
+          ]),
 
-            if (!Number.isNaN(parsed)) {
-              return parsed
-            }
-          }
-        }
+          profit: getKpi(data, [
+            'profit',
+            'total_profit',
+            'totalProfit',
+          ]),
 
-        return null
+          orders: getKpi(data, [
+            'orders',
+            'total_orders',
+            'totalOrders',
+          ]),
+
+          customers: getKpi(data, [
+            'customers',
+            'total_customers',
+            'totalCustomers',
+          ]),
+        })
+
+      } else {
+        setError(
+          'Could not load KPI data.'
+        )
       }
 
-      setKpis({
-        revenue: getAnswerNumber(revenueResponse),
-        profit: getAnswerNumber(profitResponse),
-        orders: getAnswerNumber(ordersResponse),
-        customers: getAnswerNumber(customersResponse),
-      })
 
-      setTrendData(
-        extractRows(trendResponse).map((row) => ({
-          name:
-            row.month ||
-            row.Month ||
-            row.period ||
-            row.date ||
-            row.order_date ||
-            Object.values(row)[0] ||
-            '',
-          value:
-            Number(
-              row.revenue ??
-                row.Revenue ??
-                row.sales ??
-                row.Sales ??
-                Object.values(row)[1] ??
-                0
-            ),
-        }))
-      )
+      if (results[1].status === 'fulfilled') {
 
-      setRegionData(
-        extractRows(regionResponse).map((row) => ({
-          name:
-            row.region ||
-            row.Region ||
-            row.name ||
-            Object.values(row)[0] ||
-            'Unknown',
-          value:
-            Number(
-              row.revenue ??
-                row.Revenue ??
-                row.sales ??
-                row.Sales ??
-                Object.values(row)[1] ??
-                0
-            ),
-        }))
-      )
+        setRegionData(
+          normalizeRegionData(
+            results[1].value
+          )
+        )
 
-      setCategoryData(
-        extractRows(categoryResponse).map((row) => ({
-          name:
-            row.category ||
-            row.Category ||
-            row.name ||
-            Object.values(row)[0] ||
-            'Unknown',
-          value:
-            Number(
-              row.revenue ??
-                row.Revenue ??
-                row.sales ??
-                row.Sales ??
-                Object.values(row)[1] ??
-                0
-            ),
-        }))
-      )
+      }
+
+
+      if (results[2].status === 'fulfilled') {
+
+        setCategoryData(
+          normalizeCategoryData(
+            results[2].value
+          )
+        )
+
+      }
+
+
+      if (results[3].status === 'fulfilled') {
+
+        setTrendData(
+          normalizeTrendData(
+            results[3].value
+          )
+        )
+
+      }
+
     } catch (err) {
-      console.error('Analytics loading error:', err)
+
+      console.error(
+        'Analytics loading error:',
+        err
+      )
 
       setError(
-        err?.response?.data?.detail ||
-          err?.message ||
-          'Unable to load analytics data.'
+        'Analytics data could not be loaded.'
       )
+
     } finally {
+
       setLoading(false)
+
     }
   }
+
 
   useEffect(() => {
     loadAnalytics()
   }, [])
 
-  const metricValue =
-    metric === 'Revenue'
-      ? kpis.revenue
-      : metric === 'Profit'
-        ? kpis.profit
-        : kpis.orders
 
-  const metricDisplay =
-    metric === 'Quantity'
-      ? formatNumber(metricValue)
-      : formatCurrency(metricValue)
+  const filteredRegionData =
+    regionFilter === 'All regions'
+      ? regionData
+      : regionData.filter(
+          (item) =>
+            item.name === regionFilter
+        )
+
+
+  const filteredCategoryData =
+    categoryFilter === 'All categories'
+      ? categoryData
+      : categoryData.filter(
+          (item) =>
+            item.name === categoryFilter
+        )
+
 
   return (
-    <div className="analytics-page">
-      <div className="analytics-header">
+    <div
+      className={
+        dark
+          ? 'analytics-page analytics-dark'
+          : 'analytics-page analytics-light'
+      }
+    >
+
+      {/* HEADER */}
+
+      <section className="analytics-header">
+
         <div>
-          <p className="analytics-eyebrow">ANALYTICS</p>
 
-          <h1>Explore your business performance.</h1>
+          <div className="analytics-eyebrow">
+            BUSINESS ANALYTICS
+          </div>
 
-          <p className="analytics-subtitle">
-            Turn your MetricMind data into clear, decision-ready insights.
+          <h1>
+            Explore performance.
+          </h1>
+
+          <p>
+            Analyze your business performance
+            using real MetricMind data.
           </p>
+
         </div>
+
 
         <button
           className="analytics-refresh-button"
           onClick={loadAnalytics}
           disabled={loading}
         >
-          {loading ? (
-            <Loader2 size={17} className="spin" />
-          ) : (
-            <RefreshCcw size={17} />
-          )}
 
-          {loading ? 'Refreshing...' : 'Refresh'}
+          <RefreshCw
+            size={17}
+            className={
+              loading ? 'analytics-spin' : ''
+            }
+          />
+
+          {loading
+            ? 'Refreshing'
+            : 'Refresh'}
+
         </button>
-      </div>
+
+      </section>
+
+
+      {/* ERROR */}
 
       {error && (
-        <div className="analytics-alert">
-          <BarChart3 size={18} />
+        <div className="analytics-notice">
 
-          <div>
-            <strong>Analytics data unavailable</strong>
+          <Activity size={17} />
 
-            <span>{error}</span>
-          </div>
+          <span>
+            {error}
+          </span>
+
         </div>
       )}
 
-      <div className="analytics-filter-bar">
-        <div className="filter-title">
-          <Filter size={17} />
 
-          <span>Filters</span>
-        </div>
+      {/* FILTER BAR */}
 
-        <select
-          value={metric}
-          onChange={(event) => setMetric(event.target.value)}
-        >
-          <option>Revenue</option>
-          <option>Profit</option>
-          <option>Quantity</option>
-        </select>
+      <section className="analytics-filter-card">
 
-        <select
-          value={region}
-          onChange={(event) => setRegion(event.target.value)}
-        >
-          <option>All regions</option>
-          <option>West</option>
-          <option>East</option>
-          <option>Central</option>
-          <option>South</option>
-        </select>
+        <div className="analytics-filter-title">
 
-        <select
-          value={category}
-          onChange={(event) => setCategory(event.target.value)}
-        >
-          <option>All categories</option>
-          <option>Technology</option>
-          <option>Furniture</option>
-          <option>Office Supplies</option>
-        </select>
-
-        <span className="filter-note">
-          {region === 'All regions' && category === 'All categories'
-            ? 'Showing all available data'
-            : 'Filter selection ready for analysis'}
-        </span>
-      </div>
-
-      <div className="analytics-kpi-grid">
-        <div className="analytics-kpi-card primary">
-          <div className="kpi-icon">
-            <DollarSign size={20} />
-          </div>
+          <Filter size={18} />
 
           <div>
-            <span>Total {metric}</span>
+            <strong>
+              Analysis filters
+            </strong>
 
-            <strong>{metricDisplay}</strong>
-
-            <small>Current dataset</small>
-          </div>
-
-          <ArrowUpRight className="kpi-arrow" size={18} />
-        </div>
-
-        <div className="analytics-kpi-card">
-          <div className="kpi-icon">
-            <TrendingUp size={20} />
-          </div>
-
-          <div>
-            <span>Total profit</span>
-
-            <strong>{formatCurrency(kpis.profit)}</strong>
-
-            <small>Across all records</small>
-          </div>
-        </div>
-
-        <div className="analytics-kpi-card">
-          <div className="kpi-icon">
-            <ShoppingCart size={20} />
-          </div>
-
-          <div>
-            <span>Total orders</span>
-
-            <strong>{formatNumber(kpis.orders)}</strong>
-
-            <small>Distinct orders</small>
-          </div>
-        </div>
-
-        <div className="analytics-kpi-card">
-          <div className="kpi-icon">
-            <Users size={20} />
-          </div>
-
-          <div>
-            <span>Total customers</span>
-
-            <strong>{formatNumber(kpis.customers)}</strong>
-
-            <small>Distinct customers</small>
-          </div>
-        </div>
-      </div>
-
-      <div className="analytics-section-grid">
-        <section className="analytics-panel analytics-panel-large">
-          <div className="analytics-panel-heading">
-            <div>
-              <p>PERFORMANCE</p>
-              <h2>Revenue over time</h2>
-            </div>
-
-            <span className="chart-badge">
-              <TrendingUp size={14} />
-              Monthly
+            <span>
+              Refine your business view
             </span>
           </div>
 
+        </div>
+
+
+        <div className="analytics-filter-controls">
+
+          <div className="analytics-filter">
+
+            <label>
+              Metric
+            </label>
+
+            <select
+              value={metric}
+              onChange={(event) =>
+                setMetric(
+                  event.target.value
+                )
+              }
+            >
+              <option>
+                Revenue
+              </option>
+
+              <option>
+                Profit
+              </option>
+
+              <option>
+                Quantity
+              </option>
+
+            </select>
+
+          </div>
+
+
+          <div className="analytics-filter">
+
+            <label>
+              Region
+            </label>
+
+            <select
+              value={regionFilter}
+              onChange={(event) =>
+                setRegionFilter(
+                  event.target.value
+                )
+              }
+            >
+
+              <option>
+                All regions
+              </option>
+
+              {regionData.map(
+                (item) => (
+                  <option
+                    key={item.name}
+                    value={item.name}
+                  >
+                    {item.name}
+                  </option>
+                )
+              )}
+
+            </select>
+
+          </div>
+
+
+          <div className="analytics-filter">
+
+            <label>
+              Category
+            </label>
+
+            <select
+              value={categoryFilter}
+              onChange={(event) =>
+                setCategoryFilter(
+                  event.target.value
+                )
+              }
+            >
+
+              <option>
+                All categories
+              </option>
+
+              {categoryData.map(
+                (item) => (
+                  <option
+                    key={item.name}
+                    value={item.name}
+                  >
+                    {item.name}
+                  </option>
+                )
+              )}
+
+            </select>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      {/* KPI CARDS */}
+
+      <section className="analytics-stats-grid">
+
+        <StatCard
+          icon={
+            <DollarSign size={21} />
+          }
+          title="TOTAL REVENUE"
+          value={formatCurrency(
+            kpis.revenue
+          )}
+          subtitle="Current business revenue"
+        />
+
+
+        <StatCard
+          icon={
+            <TrendingUp size={21} />
+          }
+          title="TOTAL PROFIT"
+          value={formatCurrency(
+            kpis.profit
+          )}
+          subtitle="Profit generated"
+        />
+
+
+        <StatCard
+          icon={
+            <ShoppingCart size={21} />
+          }
+          title="TOTAL ORDERS"
+          value={formatNumber(
+            kpis.orders
+          )}
+          subtitle="Orders processed"
+        />
+
+
+        <StatCard
+          icon={
+            <Users size={21} />
+          }
+          title="CUSTOMERS"
+          value={formatNumber(
+            kpis.customers
+          )}
+          subtitle="Unique customers"
+        />
+
+      </section>
+
+
+      {/* MAIN CHARTS */}
+
+      <section className="analytics-chart-grid">
+
+        {/* TREND */}
+
+        <div className="analytics-chart-card analytics-wide">
+
+          <div className="analytics-chart-header">
+
+            <div>
+
+              <div className="analytics-chart-title">
+
+                <TrendingUp size={17} />
+
+                Revenue over time
+
+              </div>
+
+              <p>
+                Monthly revenue performance
+              </p>
+
+            </div>
+
+            <span className="analytics-chart-badge">
+              {metric}
+            </span>
+
+          </div>
+
+
           <div className="analytics-chart">
-            {trendData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData}>
+
+            {trendData.length === 0 ? (
+
+              <div className="analytics-empty">
+                No trend data available.
+              </div>
+
+            ) : (
+
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+
+                <LineChart
+                  data={trendData}
+                  margin={{
+                    top: 10,
+                    right: 15,
+                    left: 5,
+                    bottom: 5,
+                  }}
+                >
+
                   <CartesianGrid
                     strokeDasharray="3 3"
                     vertical={false}
+                    stroke={
+                      dark
+                        ? '#273449'
+                        : '#e9edf5'
+                    }
                   />
 
-                  <XAxis dataKey="name" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{
+                      fill: dark
+                        ? '#a7b0c0'
+                        : '#667085',
+                      fontSize: 12,
+                    }}
+                  />
 
-                  <YAxis />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{
+                      fill: dark
+                        ? '#a7b0c0'
+                        : '#667085',
+                      fontSize: 12,
+                    }}
+                    tickFormatter={(value) =>
+                      `$${Math.round(
+                        value / 1000
+                      )}k`
+                    }
+                  />
 
                   <Tooltip
+                    contentStyle={
+                      tooltipStyle
+                    }
                     formatter={(value) => [
                       formatCurrency(value),
                       'Revenue',
@@ -454,48 +765,110 @@ export default function Analytics() {
 
                   <Line
                     type="monotone"
-                    dataKey="value"
+                    dataKey="revenue"
                     stroke="#3155ff"
                     strokeWidth={3}
                     dot={false}
-                    activeDot={{ r: 6 }}
+                    activeDot={{
+                      r: 6,
+                    }}
                   />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="empty-chart">
-                <TrendingUp size={30} />
-                <strong>No trend data available</strong>
-                <span>
-                  Upload or activate a dataset to see the revenue trend.
-                </span>
-              </div>
-            )}
-          </div>
-        </section>
 
-        <section className="analytics-panel">
-          <div className="analytics-panel-heading">
-            <div>
-              <p>REGIONS</p>
-              <h2>Performance by region</h2>
-            </div>
+                </LineChart>
+
+              </ResponsiveContainer>
+
+            )}
+
           </div>
+
+        </div>
+
+
+        {/* REGION */}
+
+        <div className="analytics-chart-card">
+
+          <div className="analytics-chart-header">
+
+            <div>
+
+              <div className="analytics-chart-title">
+
+                <BarChart3 size={17} />
+
+                Performance by region
+
+              </div>
+
+              <p>
+                Revenue distribution
+              </p>
+
+            </div>
+
+          </div>
+
 
           <div className="analytics-chart">
-            {regionData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={regionData}>
+
+            {filteredRegionData.length === 0 ? (
+
+              <div className="analytics-empty">
+                No regional data available.
+              </div>
+
+            ) : (
+
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+
+                <BarChart
+                  data={filteredRegionData}
+                  layout="vertical"
+                  margin={{
+                    top: 5,
+                    right: 15,
+                    left: 5,
+                    bottom: 5,
+                  }}
+                >
+
                   <CartesianGrid
                     strokeDasharray="3 3"
-                    vertical={false}
+                    horizontal={false}
+                    stroke={
+                      dark
+                        ? '#273449'
+                        : '#e9edf5'
+                    }
                   />
 
-                  <XAxis dataKey="name" />
+                  <XAxis
+                    type="number"
+                    hide
+                  />
 
-                  <YAxis />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    width={75}
+                    tick={{
+                      fill: dark
+                        ? '#d0d5dd'
+                        : '#667085',
+                      fontSize: 12,
+                    }}
+                  />
 
                   <Tooltip
+                    contentStyle={
+                      tooltipStyle
+                    }
                     formatter={(value) => [
                       formatCurrency(value),
                       'Revenue',
@@ -505,125 +878,219 @@ export default function Analytics() {
                   <Bar
                     dataKey="value"
                     fill="#3155ff"
-                    radius={[7, 7, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="empty-chart">
-                <BarChart3 size={30} />
-                <strong>No regional data available</strong>
-                <span>Run a query after activating a dataset.</span>
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
-
-      <div className="analytics-section-grid">
-        <section className="analytics-panel">
-          <div className="analytics-panel-heading">
-            <div>
-              <p>CATEGORIES</p>
-              <h2>Category mix</h2>
-            </div>
-          </div>
-
-          <div className="analytics-chart">
-            {categoryData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={categoryData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={105}
-                    innerRadius={55}
-                    paddingAngle={3}
-                  >
-                    {categoryData.map((entry, index) => (
-                      <Cell
-                        key={`category-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-
-                  <Tooltip
-                    formatter={(value) => [
-                      formatCurrency(value),
-                      'Revenue',
+                    radius={[
+                      0,
+                      8,
+                      8,
+                      0,
                     ]}
+                    barSize={25}
                   />
 
-                  <Legend />
-                </PieChart>
+                </BarChart>
+
               </ResponsiveContainer>
-            ) : (
-              <div className="empty-chart">
-                <Package size={30} />
-                <strong>No category data available</strong>
-                <span>
-                  Category analysis will appear here once data is available.
-                </span>
-              </div>
+
             )}
-          </div>
-        </section>
 
-        <section className="analytics-panel analytics-insight-panel">
-          <div className="analytics-panel-heading">
-            <div>
-              <p>AI INSIGHTS</p>
-              <h2>Ask MetricMind</h2>
-            </div>
           </div>
 
-          <div className="insight-content">
-            <div className="insight-icon">
-              <MessageSquare size={22} />
-            </div>
-
-            <h3>Need a deeper explanation?</h3>
-
-            <p>
-              Ask MetricMind questions about revenue, profit, products,
-              regions, categories, customers, or trends.
-            </p>
-
-            <a href="/ai-query" className="analytics-ai-button">
-              <MessageSquare size={16} />
-              Open AI Query
-            </a>
-          </div>
-        </section>
-      </div>
-
-      <div className="analytics-footer-card">
-        <div>
-          <Package size={20} />
-
-          <div>
-            <strong>Governed analytics</strong>
-
-            <span>
-              All charts are generated from MetricMind query results and
-              your active dataset.
-            </span>
-          </div>
         </div>
 
-        <button
-          className="analytics-footer-refresh"
-          onClick={loadAnalytics}
-          disabled={loading}
-        >
-          <RefreshCcw size={15} />
-          Refresh data
-        </button>
-      </div>
+
+        {/* CATEGORY */}
+
+        <div className="analytics-chart-card">
+
+          <div className="analytics-chart-header">
+
+            <div>
+
+              <div className="analytics-chart-title">
+
+                <PieChart size={17} />
+
+                Category mix
+
+              </div>
+
+              <p>
+                Revenue contribution
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <div className="analytics-category-layout">
+
+            <div className="analytics-pie">
+
+              {filteredCategoryData.length === 0 ? (
+
+                <div className="analytics-empty">
+                  No category data available.
+                </div>
+
+              ) : (
+
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+
+                  <RechartsPieChart>
+
+                    <Pie
+                      data={
+                        filteredCategoryData
+                      }
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={88}
+                      paddingAngle={3}
+                    >
+
+                      {filteredCategoryData.map(
+                        (_, index) => (
+
+                          <Cell
+                            key={index}
+                            fill={
+                              COLORS[
+                                index %
+                                  COLORS.length
+                              ]
+                            }
+                          />
+
+                        )
+                      )}
+
+                    </Pie>
+
+                    <Tooltip
+                      contentStyle={
+                        tooltipStyle
+                      }
+                    />
+
+                  </RechartsPieChart>
+
+                </ResponsiveContainer>
+
+              )}
+
+            </div>
+
+
+            <div className="analytics-category-list">
+
+              {filteredCategoryData.map(
+                (item, index) => (
+
+                  <div
+                    className="analytics-category-row"
+                    key={
+                      item.name +
+                      index
+                    }
+                  >
+
+                    <div>
+
+                      <span
+                        className="analytics-category-dot"
+                        style={{
+                          background:
+                            COLORS[
+                              index %
+                                COLORS.length
+                            ],
+                        }}
+                      />
+
+                      <span>
+                        {item.name}
+                      </span>
+
+                    </div>
+
+                    <strong>
+                      {formatCurrency(
+                        item.value
+                      )}
+                    </strong>
+
+                  </div>
+
+                )
+              )}
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {/* INSIGHT */}
+
+        <div className="analytics-insight-card">
+
+          <div className="analytics-insight-icon">
+            <BarChart3 size={22} />
+          </div>
+
+          <div>
+
+            <span>
+              METRICMIND ANALYTICS
+            </span>
+
+            <h2>
+              Your business at a glance.
+            </h2>
+
+            <p>
+              Use the filters above to explore
+              revenue, regional performance and
+              category contribution from your
+              connected business dataset.
+            </p>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      {/* FOOTER */}
+
+      <footer className="analytics-footer">
+
+        <span>
+          © 2026 MetricMind
+        </span>
+
+        <span>
+          AI-Powered Business Intelligence
+        </span>
+
+        <span>
+          ● Analytics connected
+        </span>
+
+      </footer>
+
     </div>
   )
 }
+
+
+export default Analytics
