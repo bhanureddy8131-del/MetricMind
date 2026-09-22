@@ -129,51 +129,10 @@ function extractRows(response) {
   return []
 }
 
-function getKpiValue(response, names = []) {
-  const payload = response?.data
-
-  if (typeof payload === 'number') {
-    return payload
-  }
-
-  if (typeof payload === 'string') {
-    const parsed = Number(payload)
-    return Number.isNaN(parsed) ? 0 : parsed
-  }
-
-  if (payload && typeof payload === 'object') {
-    for (const name of names) {
-      if (payload[name] !== undefined) {
-        return Number(payload[name]) || 0
-      }
-    }
-
-    if (Array.isArray(payload.data) && payload.data.length > 0) {
-      const row = payload.data[0]
-
-      for (const name of names) {
-        if (row?.[name] !== undefined) {
-          return Number(row[name]) || 0
-        }
-      }
-    }
-
-    if (Array.isArray(payload.rows) && payload.rows.length > 0) {
-      const row = payload.rows[0]
-
-      for (const name of names) {
-        if (row?.[name] !== undefined) {
-          return Number(row[name]) || 0
-        }
-      }
-    }
-  }
-
-  return 0
-}
-
 function normalizeRegion(rows) {
-  if (!rows.length) return fallbackRegion
+  if (!rows.length) {
+    return fallbackRegion
+  }
 
   return rows
     .map((row) => ({
@@ -199,7 +158,9 @@ function normalizeRegion(rows) {
 }
 
 function normalizeCategory(rows) {
-  if (!rows.length) return fallbackCategory
+  if (!rows.length) {
+    return fallbackCategory
+  }
 
   return rows
     .map((row) => ({
@@ -225,7 +186,9 @@ function normalizeCategory(rows) {
 }
 
 function normalizeTrend(rows) {
-  if (!rows.length) return fallbackTrend
+  if (!rows.length) {
+    return fallbackTrend
+  }
 
   return rows.map((row, index) => ({
     name:
@@ -253,7 +216,9 @@ function normalizeTrend(rows) {
 }
 
 function normalizeProducts(rows) {
-  if (!rows.length) return fallbackProducts
+  if (!rows.length) {
+    return fallbackProducts
+  }
 
   return rows
     .map((row) => ({
@@ -271,6 +236,8 @@ function normalizeProducts(rows) {
           row.Revenue ??
           row.sales ??
           row.Sales ??
+          row.profit ??
+          row.Profit ??
           row.value ??
           row.Value ??
           0
@@ -302,20 +269,31 @@ export default function Dashboard() {
     customers: 0,
   })
 
-  const [regionData, setRegionData] = useState(fallbackRegion)
-  const [categoryData, setCategoryData] = useState(fallbackCategory)
-  const [trendData, setTrendData] = useState(fallbackTrend)
-  const [productData, setProductData] = useState(fallbackProducts)
+  const [regionData, setRegionData] =
+    useState(fallbackRegion)
 
-  const [notificationOpen, setNotificationOpen] = useState(false)
+  const [categoryData, setCategoryData] =
+    useState(fallbackCategory)
 
-  const [copilotQuestion, setCopilotQuestion] = useState('')
+  const [trendData, setTrendData] =
+    useState(fallbackTrend)
 
-  const [copilotAnswer, setCopilotAnswer] = useState(
-    'Ask me anything about your business data.'
-  )
+  const [productData, setProductData] =
+    useState(fallbackProducts)
 
-  const [copilotLoading, setCopilotLoading] = useState(false)
+  const [notificationOpen, setNotificationOpen] =
+    useState(false)
+
+  const [copilotQuestion, setCopilotQuestion] =
+    useState('')
+
+  const [copilotAnswer, setCopilotAnswer] =
+    useState(
+      'Ask me anything about your business data.'
+    )
+
+  const [copilotLoading, setCopilotLoading] =
+    useState(false)
 
 
   /* =======================================================
@@ -339,41 +317,44 @@ export default function Dashboard() {
     setLoading(true)
 
     try {
-      const healthResponse = await apiService.health()
+      /* ---------------------------------------------------
+         CHECK BACKEND HEALTH
+         --------------------------------------------------- */
 
-      if (healthResponse?.status >= 200 && healthResponse?.status < 300) {
+      const healthResponse =
+        await apiService.health()
+
+      if (
+        healthResponse?.status >= 200 &&
+        healthResponse?.status < 300
+      ) {
         setApiOnline(true)
+      } else {
+        setApiOnline(false)
       }
     } catch (error) {
+      console.error(
+        'Health check failed:',
+        error
+      )
+
       setApiOnline(false)
     }
 
+
     try {
+      /* ---------------------------------------------------
+         LOAD DASHBOARD DATA
+         --------------------------------------------------- */
+
       const [
-        revenueResponse,
-        profitResponse,
-        ordersResponse,
-        customersResponse,
+        kpiResponse,
         regionResponse,
         categoryResponse,
         trendResponse,
         productResponse,
       ] = await Promise.allSettled([
-        apiService.query({
-          question: 'What is the total revenue?',
-        }),
-
-        apiService.query({
-          question: 'What is the total profit?',
-        }),
-
-        apiService.query({
-          question: 'How many orders are there?',
-        }),
-
-        apiService.query({
-          question: 'How many customers are there?',
-        }),
+        apiService.getDashboardKPIs(),
 
         apiService.getSalesByRegion(),
 
@@ -385,114 +366,127 @@ export default function Dashboard() {
       ])
 
 
-      /* -----------------------------------------------------
+      /* ===================================================
          KPI DATA
-         ----------------------------------------------------- */
+         =================================================== */
 
-      if (revenueResponse.status === 'fulfilled') {
-        setKpis((previous) => ({
-          ...previous,
-          revenue: getKpiValue(
-            revenueResponse.value,
-            [
-              'revenue',
-              'total_revenue',
-              'sales',
-              'value',
-            ]
-          ),
-        }))
-      }
+      if (kpiResponse.status === 'fulfilled') {
+        const data =
+          kpiResponse.value?.data || {}
 
-      if (profitResponse.status === 'fulfilled') {
-        setKpis((previous) => ({
-          ...previous,
-          profit: getKpiValue(
-            profitResponse.value,
-            [
-              'profit',
-              'total_profit',
-              'value',
-            ]
-          ),
-        }))
-      }
+        setKpis({
+          revenue:
+            Number(data.revenue || 0),
 
-      if (ordersResponse.status === 'fulfilled') {
-        setKpis((previous) => ({
-          ...previous,
-          orders: getKpiValue(
-            ordersResponse.value,
-            [
-              'orders',
-              'total_orders',
-              'order_count',
-              'count',
-              'value',
-            ]
-          ),
-        }))
-      }
+          profit:
+            Number(data.profit || 0),
 
-      if (customersResponse.status === 'fulfilled') {
-        setKpis((previous) => ({
-          ...previous,
-          customers: getKpiValue(
-            customersResponse.value,
-            [
-              'customers',
-              'total_customers',
-              'customer_count',
-              'count',
-              'value',
-            ]
-          ),
-        }))
+          orders:
+            Number(data.orders || 0),
+
+          customers:
+            Number(data.customers || 0),
+        })
+      } else {
+        console.error(
+          'KPI request failed:',
+          kpiResponse.reason
+        )
       }
 
 
-      /* -----------------------------------------------------
-         CHART DATA
-         ----------------------------------------------------- */
+      /* ===================================================
+         REGION DATA
+         =================================================== */
 
       if (regionResponse.status === 'fulfilled') {
         setRegionData(
           normalizeRegion(
-            extractRows(regionResponse.value)
+            extractRows(
+              regionResponse.value
+            )
           )
         )
+      } else {
+        console.error(
+          'Region request failed:',
+          regionResponse.reason
+        )
       }
+
+
+      /* ===================================================
+         CATEGORY DATA
+         =================================================== */
 
       if (categoryResponse.status === 'fulfilled') {
         setCategoryData(
           normalizeCategory(
-            extractRows(categoryResponse.value)
+            extractRows(
+              categoryResponse.value
+            )
           )
         )
+      } else {
+        console.error(
+          'Category request failed:',
+          categoryResponse.reason
+        )
       }
+
+
+      /* ===================================================
+         TREND DATA
+         =================================================== */
 
       if (trendResponse.status === 'fulfilled') {
         setTrendData(
           normalizeTrend(
-            extractRows(trendResponse.value)
+            extractRows(
+              trendResponse.value
+            )
           )
         )
+      } else {
+        console.error(
+          'Trend request failed:',
+          trendResponse.reason
+        )
       }
+
+
+      /* ===================================================
+         PRODUCT DATA
+         =================================================== */
 
       if (productResponse.status === 'fulfilled') {
         setProductData(
           normalizeProducts(
-            extractRows(productResponse.value)
+            extractRows(
+              productResponse.value
+            )
           )
+        )
+      } else {
+        console.error(
+          'Product request failed:',
+          productResponse.reason
         )
       }
     } catch (error) {
-      console.error('Dashboard loading error:', error)
+      console.error(
+        'Dashboard loading error:',
+        error
+      )
     } finally {
       setLoading(false)
     }
   }
 
+
+  /* =======================================================
+     INITIAL LOAD
+     ======================================================= */
 
   useEffect(() => {
     loadDashboard()
@@ -508,7 +502,9 @@ export default function Dashboard() {
 
     const value = search.trim()
 
-    if (!value) return
+    if (!value) {
+      return
+    }
 
     navigate(
       `/ai-query?q=${encodeURIComponent(value)}`
@@ -520,18 +516,27 @@ export default function Dashboard() {
      AI COPILOT
      ======================================================= */
 
-  const askCopilot = async (question = copilotQuestion) => {
-    const cleanQuestion = question.trim()
+  const askCopilot = async (
+    question = copilotQuestion
+  ) => {
+    const cleanQuestion =
+      question.trim()
 
-    if (!cleanQuestion) return
+    if (!cleanQuestion) {
+      return
+    }
 
     setCopilotLoading(true)
-    setCopilotAnswer('Analyzing your business data...')
+
+    setCopilotAnswer(
+      'Analyzing your business data...'
+    )
 
     try {
-      const response = await apiService.query({
-        question: cleanQuestion,
-      })
+      const response =
+        await apiService.query({
+          question: cleanQuestion,
+        })
 
       const answer =
         response?.data?.answer ||
@@ -540,7 +545,10 @@ export default function Dashboard() {
 
       setCopilotAnswer(answer)
     } catch (error) {
-      console.error('Copilot error:', error)
+      console.error(
+        'Copilot error:',
+        error
+      )
 
       setCopilotAnswer(
         'I could not connect to the analytics engine. Please check the backend and try again.'
@@ -557,7 +565,8 @@ export default function Dashboard() {
 
   const categoryTotal = useMemo(() => {
     return categoryData.reduce(
-      (total, item) => total + Number(item.value || 0),
+      (total, item) =>
+        total + Number(item.value || 0),
       0
     )
   }, [categoryData])
@@ -595,14 +604,14 @@ export default function Dashboard() {
 
       <aside className="metric-sidebar">
 
-        {/* LOGO */}
-
         <div className="metric-logo">
+
           <div className="metric-logo-mark">
             M
           </div>
 
           <div>
+
             <div className="metric-logo-name">
               METRICMIND
             </div>
@@ -610,22 +619,25 @@ export default function Dashboard() {
             <div className="metric-logo-subtitle">
               BUSINESS INTELLIGENCE
             </div>
+
           </div>
+
         </div>
 
-
-        {/* MAIN */}
 
         <div className="metric-sidebar-section">
           MAIN
         </div>
+
 
         <nav className="metric-sidebar-nav">
 
           <Link
             to="/"
             className={`metric-sidebar-link ${
-              isActive('/') ? 'active' : ''
+              isActive('/')
+                ? 'active'
+                : ''
             }`}
           >
             <Home size={18} />
@@ -636,7 +648,9 @@ export default function Dashboard() {
           <Link
             to="/analytics"
             className={`metric-sidebar-link ${
-              isActive('/analytics') ? 'active' : ''
+              isActive('/analytics')
+                ? 'active'
+                : ''
             }`}
           >
             <BarChart3 size={18} />
@@ -647,7 +661,9 @@ export default function Dashboard() {
           <Link
             to="/dataset"
             className={`metric-sidebar-link ${
-              isActive('/dataset') ? 'active' : ''
+              isActive('/dataset')
+                ? 'active'
+                : ''
             }`}
           >
             <Database size={18} />
@@ -658,7 +674,9 @@ export default function Dashboard() {
           <Link
             to="/add-data"
             className={`metric-sidebar-link ${
-              isActive('/add-data') ? 'active' : ''
+              isActive('/add-data')
+                ? 'active'
+                : ''
             }`}
           >
             <Plus size={18} />
@@ -669,7 +687,9 @@ export default function Dashboard() {
           <Link
             to="/ai-query"
             className={`metric-sidebar-link ${
-              isActive('/ai-query') ? 'active' : ''
+              isActive('/ai-query')
+                ? 'active'
+                : ''
             }`}
           >
             <Sparkles size={18} />
@@ -679,18 +699,19 @@ export default function Dashboard() {
         </nav>
 
 
-        {/* MANAGEMENT */}
-
         <div className="metric-sidebar-section management-title">
           MANAGEMENT
         </div>
+
 
         <nav className="metric-sidebar-nav">
 
           <Link
             to="/reports"
             className={`metric-sidebar-link ${
-              isActive('/reports') ? 'active' : ''
+              isActive('/reports')
+                ? 'active'
+                : ''
             }`}
           >
             <FileBarChart size={18} />
@@ -701,7 +722,9 @@ export default function Dashboard() {
           <Link
             to="/settings"
             className={`metric-sidebar-link ${
-              isActive('/settings') ? 'active' : ''
+              isActive('/settings')
+                ? 'active'
+                : ''
             }`}
           >
             <Settings size={18} />
@@ -710,8 +733,6 @@ export default function Dashboard() {
 
         </nav>
 
-
-        {/* SIDEBAR BOTTOM */}
 
         <div className="metric-sidebar-bottom">
 
@@ -722,11 +743,13 @@ export default function Dashboard() {
             </div>
 
             <div>
+
               <div className="status-title">
                 System Status
               </div>
 
               <div className="status-value">
+
                 <span
                   className={
                     apiOnline
@@ -738,7 +761,9 @@ export default function Dashboard() {
                 {apiOnline
                   ? 'API Connected'
                   : 'API Offline'}
+
               </div>
+
             </div>
 
           </div>
@@ -765,13 +790,16 @@ export default function Dashboard() {
             className="dashboard-search"
             onSubmit={handleSearch}
           >
+
             <Search size={18} />
 
             <input
               type="text"
               value={search}
               onChange={(event) =>
-                setSearch(event.target.value)
+                setSearch(
+                  event.target.value
+                )
               }
               placeholder="Search or ask MetricMind..."
             />
@@ -780,7 +808,9 @@ export default function Dashboard() {
               <button
                 type="button"
                 className="search-clear"
-                onClick={() => setSearch('')}
+                onClick={() =>
+                  setSearch('')
+                }
               >
                 <X size={15} />
               </button>
@@ -790,6 +820,7 @@ export default function Dashboard() {
 
 
           <div className="dashboard-top-actions">
+
 
             {/* THEME */}
 
@@ -820,13 +851,16 @@ export default function Dashboard() {
                 className="icon-button notification-button"
                 onClick={() =>
                   setNotificationOpen(
-                    (previous) => !previous
+                    (previous) =>
+                      !previous
                   )
                 }
               >
+
                 <Bell size={18} />
 
                 <span className="notification-dot" />
+
               </button>
 
 
@@ -834,6 +868,7 @@ export default function Dashboard() {
                 <div className="notification-popover">
 
                   <div className="notification-header">
+
                     <strong>
                       Notifications
                     </strong>
@@ -841,19 +876,25 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={() =>
-                        setNotificationOpen(false)
+                        setNotificationOpen(
+                          false
+                        )
                       }
                     >
                       <X size={15} />
                     </button>
+
                   </div>
 
+
                   <div className="notification-item">
+
                     <div className="notification-item-icon">
                       <Activity size={15} />
                     </div>
 
                     <div>
+
                       <strong>
                         MetricMind is running
                       </strong>
@@ -861,7 +902,9 @@ export default function Dashboard() {
                       <p>
                         Your dashboard is ready.
                       </p>
+
                     </div>
+
                   </div>
 
                 </div>
@@ -879,6 +922,7 @@ export default function Dashboard() {
               </div>
 
               <div className="profile-details">
+
                 <strong>
                   MetricMind User
                 </strong>
@@ -886,6 +930,7 @@ export default function Dashboard() {
                 <span>
                   Administrator
                 </span>
+
               </div>
 
             </div>
@@ -933,11 +978,13 @@ export default function Dashboard() {
                     : 'api-status disconnected'
                 }
               >
+
                 <span />
 
                 {apiOnline
                   ? 'API Connected'
                   : 'Preview Mode'}
+
               </div>
 
 
@@ -947,14 +994,18 @@ export default function Dashboard() {
                 onClick={loadDashboard}
                 disabled={loading}
               >
+
                 <RefreshCw
                   size={16}
                   className={
-                    loading ? 'spin' : ''
+                    loading
+                      ? 'spin'
+                      : ''
                   }
                 />
 
                 Refresh
+
               </button>
 
 
@@ -962,9 +1013,11 @@ export default function Dashboard() {
                 to="/add-data"
                 className="dashboard-primary-button"
               >
+
                 <Plus size={16} />
 
                 Add Data
+
               </Link>
 
             </div>
@@ -977,6 +1030,7 @@ export default function Dashboard() {
               ================================================= */}
 
           <div className="dashboard-kpi-grid">
+
 
             {/* REVENUE */}
 
@@ -994,21 +1048,32 @@ export default function Dashboard() {
 
               </div>
 
+
               <div className="kpi-value">
+
                 {loading
                   ? '—'
-                  : formatCurrency(kpis.revenue)}
+                  : formatCurrency(
+                      kpis.revenue
+                    )}
+
               </div>
 
+
               <div className="kpi-footer">
+
                 <span className="kpi-positive">
+
                   <TrendingUp size={13} />
+
                   Business performance
+
                 </span>
 
                 <span className="kpi-period">
                   Current
                 </span>
+
               </div>
 
             </div>
@@ -1030,21 +1095,32 @@ export default function Dashboard() {
 
               </div>
 
+
               <div className="kpi-value">
+
                 {loading
                   ? '—'
-                  : formatCurrency(kpis.profit)}
+                  : formatCurrency(
+                      kpis.profit
+                    )}
+
               </div>
 
+
               <div className="kpi-footer">
+
                 <span className="kpi-positive">
+
                   <TrendingUp size={13} />
+
                   Profit generated
+
                 </span>
 
                 <span className="kpi-period">
                   Current
                 </span>
+
               </div>
 
             </div>
@@ -1066,21 +1142,32 @@ export default function Dashboard() {
 
               </div>
 
+
               <div className="kpi-value">
+
                 {loading
                   ? '—'
-                  : formatNumber(kpis.orders)}
+                  : formatNumber(
+                      kpis.orders
+                    )}
+
               </div>
 
+
               <div className="kpi-footer">
+
                 <span className="kpi-positive">
+
                   <ShoppingCart size={13} />
+
                   Orders processed
+
                 </span>
 
                 <span className="kpi-period">
                   Current
                 </span>
+
               </div>
 
             </div>
@@ -1102,21 +1189,32 @@ export default function Dashboard() {
 
               </div>
 
+
               <div className="kpi-value">
+
                 {loading
                   ? '—'
-                  : formatNumber(kpis.customers)}
+                  : formatNumber(
+                      kpis.customers
+                    )}
+
               </div>
 
+
               <div className="kpi-footer">
+
                 <span className="kpi-positive">
+
                   <Users size={13} />
+
                   Unique customers
+
                 </span>
 
                 <span className="kpi-period">
                   Current
                 </span>
+
               </div>
 
             </div>
@@ -1138,6 +1236,7 @@ export default function Dashboard() {
               <div className="panel-header">
 
                 <div>
+
                   <span className="panel-eyebrow">
                     PERFORMANCE
                   </span>
@@ -1149,6 +1248,7 @@ export default function Dashboard() {
                   <p>
                     Monthly revenue movement
                   </p>
+
                 </div>
 
                 <div className="panel-icon">
@@ -1164,6 +1264,7 @@ export default function Dashboard() {
                   width="100%"
                   height="100%"
                 >
+
                   <LineChart
                     data={trendData}
                     margin={{
@@ -1233,6 +1334,7 @@ export default function Dashboard() {
                     />
 
                   </LineChart>
+
                 </ResponsiveContainer>
 
               </div>
@@ -1247,6 +1349,7 @@ export default function Dashboard() {
               <div className="panel-header">
 
                 <div>
+
                   <span className="panel-eyebrow">
                     GEOGRAPHY
                   </span>
@@ -1258,6 +1361,7 @@ export default function Dashboard() {
                   <p>
                     Regional performance
                   </p>
+
                 </div>
 
                 <div className="panel-icon">
@@ -1273,6 +1377,7 @@ export default function Dashboard() {
                   width="100%"
                   height="100%"
                 >
+
                   <BarChart
                     data={regionData}
                     layout="vertical"
@@ -1344,6 +1449,7 @@ export default function Dashboard() {
                     />
 
                   </BarChart>
+
                 </ResponsiveContainer>
 
               </div>
@@ -1367,6 +1473,7 @@ export default function Dashboard() {
               <div className="panel-header">
 
                 <div>
+
                   <span className="panel-eyebrow">
                     PRODUCT MIX
                   </span>
@@ -1378,6 +1485,7 @@ export default function Dashboard() {
                   <p>
                     Category contribution
                   </p>
+
                 </div>
 
                 <div className="panel-icon purple">
@@ -1395,6 +1503,7 @@ export default function Dashboard() {
                     width="100%"
                     height="100%"
                   >
+
                     <RechartsPieChart>
 
                       <Pie
@@ -1415,7 +1524,7 @@ export default function Dashboard() {
                               fill={
                                 pieColors[
                                   index %
-                                  pieColors.length
+                                    pieColors.length
                                 ]
                               }
                             />
@@ -1427,7 +1536,9 @@ export default function Dashboard() {
                       <Tooltip />
 
                     </RechartsPieChart>
+
                   </ResponsiveContainer>
+
 
                   <div className="donut-center">
 
@@ -1452,7 +1563,9 @@ export default function Dashboard() {
                       const percentage =
                         categoryTotal > 0
                           ? (
-                              (Number(item.value) /
+                              (Number(
+                                item.value
+                              ) /
                                 categoryTotal) *
                               100
                             ).toFixed(0)
@@ -1472,7 +1585,7 @@ export default function Dashboard() {
                                 background:
                                   pieColors[
                                     index %
-                                    pieColors.length
+                                      pieColors.length
                                   ],
                               }}
                             />
@@ -1506,6 +1619,7 @@ export default function Dashboard() {
               <div className="panel-header">
 
                 <div>
+
                   <span className="panel-eyebrow">
                     TOP PERFORMERS
                   </span>
@@ -1517,6 +1631,7 @@ export default function Dashboard() {
                   <p>
                     Highest revenue products
                   </p>
+
                 </div>
 
                 <div className="panel-icon orange">
@@ -1643,6 +1758,7 @@ export default function Dashboard() {
                     !copilotQuestion.trim()
                   }
                 >
+
                   {copilotLoading ? (
                     <RefreshCw
                       size={16}
@@ -1653,6 +1769,7 @@ export default function Dashboard() {
                   )}
 
                   Ask AI
+
                 </button>
 
               </form>
@@ -1686,6 +1803,7 @@ export default function Dashboard() {
             <div className="quick-actions-heading">
 
               <div>
+
                 <span className="panel-eyebrow">
                   WORKSPACE
                 </span>
@@ -1693,6 +1811,7 @@ export default function Dashboard() {
                 <h2>
                   Quick Actions
                 </h2>
+
               </div>
 
             </div>
@@ -1711,6 +1830,7 @@ export default function Dashboard() {
                 </div>
 
                 <div>
+
                   <strong>
                     Add Business Data
                   </strong>
@@ -1718,6 +1838,7 @@ export default function Dashboard() {
                   <span>
                     Enter new business records
                   </span>
+
                 </div>
 
                 <ChevronRight size={17} />
@@ -1735,6 +1856,7 @@ export default function Dashboard() {
                 </div>
 
                 <div>
+
                   <strong>
                     Upload Dataset
                   </strong>
@@ -1742,6 +1864,7 @@ export default function Dashboard() {
                   <span>
                     Import CSV or Excel data
                   </span>
+
                 </div>
 
                 <ChevronRight size={17} />
@@ -1759,6 +1882,7 @@ export default function Dashboard() {
                 </div>
 
                 <div>
+
                   <strong>
                     AI Analysis
                   </strong>
@@ -1766,6 +1890,7 @@ export default function Dashboard() {
                   <span>
                     Ask questions about data
                   </span>
+
                 </div>
 
                 <ChevronRight size={17} />
@@ -1783,6 +1908,7 @@ export default function Dashboard() {
                 </div>
 
                 <div>
+
                   <strong>
                     Generate Report
                   </strong>
@@ -1790,6 +1916,7 @@ export default function Dashboard() {
                   <span>
                     Create business reports
                   </span>
+
                 </div>
 
                 <ChevronRight size={17} />
@@ -1808,6 +1935,7 @@ export default function Dashboard() {
           <footer className="dashboard-footer">
 
             <div>
+
               <strong>
                 MetricMind
               </strong>
@@ -1815,7 +1943,9 @@ export default function Dashboard() {
               <span>
                 AI-powered business intelligence
               </span>
+
             </div>
+
 
             <div className="footer-status">
 
