@@ -12,17 +12,18 @@ const api = axios.create({
   },
 })
 
-// ======================================================
-// REQUEST INTERCEPTOR
-// ======================================================
+/* =========================================================
+   AUTH TOKEN
+   ========================================================= */
 
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('metricmind_token')
+    const token =
+      localStorage.getItem('metricmind_token')
 
     if (token) {
-      config.headers = config.headers || {}
-      config.headers.Authorization = `Bearer ${token}`
+      config.headers.Authorization =
+        `Bearer ${token}`
     }
 
     return config
@@ -30,46 +31,66 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// ======================================================
-// RESPONSE INTERCEPTOR
-// ======================================================
+
+/* =========================================================
+   RESPONSE INTERCEPTOR
+   ========================================================= */
 
 api.interceptors.response.use(
   (response) => response,
+
   (error) => {
     if (error?.response?.status === 401) {
-      localStorage.removeItem('metricmind_token')
+      localStorage.removeItem(
+        'metricmind_token'
+      )
 
       if (
-        window.location.pathname !== '/login' &&
-        window.location.pathname !== '/register'
+        window.location.pathname !== '/login'
       ) {
         window.location.href = '/login'
       }
     }
 
-    return Promise.reject(error)
+    return Promise.reject(
+      error?.response?.data?.detail ||
+      error
+    )
   }
 )
 
-// ======================================================
-// API SERVICE
-// ======================================================
 
-export const apiService = {
+/* =========================================================
+   API SERVICE
+   ========================================================= */
 
-  // HEALTH
+const apiService = {
+
+  /* -------------------------------------------------------
+     HEALTH
+     ------------------------------------------------------- */
+
   health() {
     return api.get('/health')
   },
 
-  // AUTH
+
+  /* -------------------------------------------------------
+     AUTH
+     ------------------------------------------------------- */
+
   login(data) {
-    return api.post('/v1/auth/login', data)
+    return api.post(
+      '/v1/auth/login',
+      data
+    )
   },
 
   register(data) {
-    return api.post('/v1/auth/register', data)
+    return api.post(
+      '/v1/auth/register',
+      data
+    )
   },
 
   me() {
@@ -77,148 +98,206 @@ export const apiService = {
   },
 
   logout() {
-    return api.post('/v1/auth/logout')
+    return api.post(
+      '/v1/auth/logout'
+    )
   },
 
-  // METRICS
-  metrics() {
+
+  /* -------------------------------------------------------
+     METRICS
+     ------------------------------------------------------- */
+
+  getMetrics() {
     return api.get('/metrics')
   },
 
-  dimensions() {
-    return api.get('/dimensions')
-  },
 
-  // AI QUERY
-  query(data) {
-    let question = ''
-
-    if (typeof data === 'string') {
-      question = data
-    } else if (data && typeof data === 'object') {
-      question = String(data.question || '')
-    } else {
-      throw new Error(
-        'Query must be a string or an object containing question'
-      )
-    }
-
-    if (!question.trim()) {
-      throw new Error('Question cannot be empty')
-    }
-
-    return api.post('/query', {
-      question: question.trim(),
-    })
-  },
-
-  // ====================================================
-  // DASHBOARD KPI
-  // ====================================================
+  /* -------------------------------------------------------
+     DASHBOARD KPIs
+     ------------------------------------------------------- */
 
   getDashboardKPIs() {
     return api.get('/dashboard/kpis')
   },
 
-  // ====================================================
-  // REGION
-  // ====================================================
+
+  /* -------------------------------------------------------
+     REGION
+     ------------------------------------------------------- */
 
   getSalesByRegion() {
-    return apiService.query(
-      'What is total revenue by region?'
+    return api.get(
+      '/dashboard/sales-by-region'
     )
   },
 
-  // ====================================================
-  // CATEGORY
-  // ====================================================
+
+  /* -------------------------------------------------------
+     CATEGORY
+     ------------------------------------------------------- */
 
   getSalesByCategory() {
-    return apiService.query(
-      'What is total revenue by category?'
+    return api.get(
+      '/dashboard/sales-by-category'
     )
   },
 
-  // ====================================================
-  // TOP PRODUCTS
-  // ====================================================
 
-  getTopProducts() {
-    return apiService.query(
-      'Show top 10 products by profit'
-    )
-  },
-
-  // ====================================================
-  // SALES TREND
-  // ====================================================
+  /* -------------------------------------------------------
+     SALES TREND
+     ------------------------------------------------------- */
 
   getSalesTrend(period = 'month') {
-    let question = 'Show monthly revenue trend'
-
-    if (period === 'week') {
-      question = 'Show weekly revenue trend'
-    }
-
-    if (period === 'day') {
-      question = 'Show daily revenue trend'
-    }
-
-    if (period === 'year') {
-      question = 'Show yearly revenue trend'
-    }
-
-    return apiService.query(question)
+    return api.get(
+      '/dashboard/sales-trend',
+      {
+        params: {
+          period,
+        },
+      }
+    )
   },
 
-  // ====================================================
-  // BUSINESS DATA
-  // ====================================================
+
+  /* -------------------------------------------------------
+     TOP PRODUCTS
+     ------------------------------------------------------- */
+
+  getTopProducts() {
+    return api.get(
+      '/dashboard/top-products'
+    )
+  },
+
+
+  /* -------------------------------------------------------
+     AI QUERY
+     ------------------------------------------------------- */
+
+  query(data) {
+    return api.post(
+      '/query',
+      data
+    )
+  },
+
+
+  /* -------------------------------------------------------
+     DATASET
+     ------------------------------------------------------- */
+
+  getDataset(params = {}) {
+    return api.get(
+      '/dataset',
+      {
+        params,
+      }
+    )
+  },
+
+  uploadDataset(file) {
+    const formData =
+      new FormData()
+
+    formData.append(
+      'file',
+      file
+    )
+
+    return api.post(
+      '/dataset/upload',
+      formData,
+      {
+        headers: {
+          'Content-Type':
+            'multipart/form-data',
+        },
+      }
+    )
+  },
+
+
+  /* -------------------------------------------------------
+     ADD BUSINESS DATA
+     ------------------------------------------------------- */
 
   addBusinessData(data) {
-    return api.post('/data', data)
+    return api.post(
+      '/dataset',
+      data
+    )
   },
 
-  getBusinessData() {
-    return api.get('/data')
+
+  /* -------------------------------------------------------
+     REPORTS
+     ------------------------------------------------------- */
+
+  getReports() {
+    return api.get('/reports')
   },
 
-  deleteBusinessData(id) {
-    return api.delete(`/data/${id}`)
+  generateReport(data = {}) {
+    return api.post(
+      '/reports/generate',
+      data
+    )
   },
 
-  // ====================================================
-  // DATASET
-  // ====================================================
 
-  uploadDataset(formData) {
-    return api.post('/datasets/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
+  /* -------------------------------------------------------
+     GENERIC GET
+     ------------------------------------------------------- */
+
+  get(url, config = {}) {
+    return api.get(
+      url,
+      config
+    )
   },
 
-  getDatasets() {
-    return api.get('/datasets')
+
+  /* -------------------------------------------------------
+     GENERIC POST
+     ------------------------------------------------------- */
+
+  post(url, data, config = {}) {
+    return api.post(
+      url,
+      data,
+      config
+    )
   },
 
-  getActiveDataset() {
-    return api.get('/datasets/active')
+
+  /* -------------------------------------------------------
+     GENERIC PUT
+     ------------------------------------------------------- */
+
+  put(url, data, config = {}) {
+    return api.put(
+      url,
+      data,
+      config
+    )
   },
 
-  getDataset(id) {
-    return api.get(`/datasets/${id}`)
-  },
 
-  activateDataset(id) {
-    return api.post(`/datasets/${id}/activate`)
-  },
+  /* -------------------------------------------------------
+     GENERIC DELETE
+     ------------------------------------------------------- */
 
-  deleteDataset(id) {
-    return api.delete(`/datasets/${id}`)
+  delete(url, config = {}) {
+    return api.delete(
+      url,
+      config
+    )
   },
 }
+
+export { api }
+
+export { apiService }
 
 export default apiService

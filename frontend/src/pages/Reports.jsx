@@ -11,7 +11,11 @@ import {
   TrendingUp,
   Users,
   ShoppingCart,
+  AlertCircle,
+  CheckCircle,
 } from 'lucide-react'
+
+import * as XLSX from 'xlsx'
 
 import { apiService } from '../services/api'
 
@@ -20,7 +24,9 @@ function Reports() {
   const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   const [reportType, setReportType] =
     useState('Sales Report')
@@ -40,14 +46,28 @@ function Reports() {
   const [productData, setProductData] = useState([])
 
 
+  // ============================================================
+  // LOAD REPORT WHEN FILTERS CHANGE
+  // ============================================================
+
   useEffect(() => {
     loadReport()
   }, [period, reportType])
 
 
+  // ============================================================
+  // API QUERY HELPER
+  // ============================================================
+
   async function ask(question) {
     try {
-      return await apiService.query(question)
+      const response =
+        await apiService.query({
+          question,
+        })
+
+      return response?.data || response || null
+
     } catch (error) {
       console.error(
         'Report query failed:',
@@ -60,16 +80,16 @@ function Reports() {
   }
 
 
+  // ============================================================
+  // LOAD REPORT DATA
+  // ============================================================
+
   async function loadReport() {
     setLoading(true)
     setError('')
+    setSuccess('')
 
     try {
-      /*
-       * These queries use the SAME backend dataset
-       * used by the MetricMind Dashboard.
-       */
-
       const [
         revenueResult,
         profitResult,
@@ -136,11 +156,9 @@ function Reports() {
         normalizeRows(regionResult)
       )
 
-
       setCategoryData(
         normalizeRows(categoryResult)
       )
-
 
       setProductData(
         normalizeRows(productResult)
@@ -151,11 +169,15 @@ function Reports() {
         !revenueResult &&
         !profitResult &&
         !ordersResult &&
-        !customersResult
+        !customersResult &&
+        !regionResult &&
+        !categoryResult &&
+        !productResult
+
 
       if (everythingFailed) {
         setError(
-          'Unable to load dataset information from the backend.'
+          'Unable to load report data from the backend.'
         )
       }
 
@@ -169,11 +191,16 @@ function Reports() {
         error?.message ||
         'Unable to load report data.'
       )
+
     } finally {
       setLoading(false)
     }
   }
 
+
+  // ============================================================
+  // EXTRACT NUMBER FROM API RESPONSE
+  // ============================================================
 
   function extractNumber(result) {
     if (!result) {
@@ -181,12 +208,15 @@ function Reports() {
     }
 
 
+    // --------------------------------------------
+    // data = array
+    // --------------------------------------------
+
     if (Array.isArray(result.data)) {
 
       if (result.data.length === 0) {
         return 0
       }
-
 
       const first =
         result.data[0]
@@ -204,33 +234,71 @@ function Reports() {
         typeof first === 'object'
       ) {
 
+        const preferredKeys = [
+          'value',
+          'total',
+          'revenue',
+          'sales',
+          'profit',
+          'orders',
+          'customers',
+          'count',
+          'total_revenue',
+          'total_profit',
+          'order_count',
+          'customer_count',
+        ]
+
+
+        for (
+          const key of preferredKeys
+        ) {
+
+          if (
+            first[key] !== undefined &&
+            first[key] !== null
+          ) {
+
+            const value =
+              Number(first[key])
+
+            if (
+              Number.isFinite(value)
+            ) {
+              return value
+            }
+          }
+        }
+
+
         const values =
           Object.values(first)
 
 
-        for (const value of values) {
+        for (
+          const value of values
+        ) {
+
+          const numericValue =
+            Number(value)
 
           if (
-            typeof value === 'number' &&
-            Number.isFinite(value)
-          ) {
-            return value
-          }
-
-
-          if (
-            typeof value === 'string' &&
-            value.trim() !== '' &&
+            value !== null &&
+            value !== '' &&
             Number.isFinite(
-              Number(value)
+              numericValue
             )
           ) {
-            return Number(value)
+            return numericValue
           }
         }
       }
     }
 
+
+    // --------------------------------------------
+    // data = number
+    // --------------------------------------------
 
     if (
       typeof result.data === 'number'
@@ -239,50 +307,102 @@ function Reports() {
     }
 
 
+    // --------------------------------------------
+    // data = object
+    // --------------------------------------------
+
     if (
       result.data &&
       typeof result.data === 'object'
     ) {
 
+      const preferredKeys = [
+        'value',
+        'total',
+        'revenue',
+        'sales',
+        'profit',
+        'orders',
+        'customers',
+        'count',
+        'total_revenue',
+        'total_profit',
+        'order_count',
+        'customer_count',
+      ]
+
+
+      for (
+        const key of preferredKeys
+      ) {
+
+        if (
+          result.data[key] !== undefined &&
+          result.data[key] !== null
+        ) {
+
+          const value =
+            Number(
+              result.data[key]
+            )
+
+          if (
+            Number.isFinite(value)
+          ) {
+            return value
+          }
+        }
+      }
+
+
       const values =
         Object.values(result.data)
 
 
-      for (const value of values) {
+      for (
+        const value of values
+      ) {
+
+        const numericValue =
+          Number(value)
 
         if (
-          typeof value === 'number' &&
-          Number.isFinite(value)
-        ) {
-          return value
-        }
-
-        if (
-          typeof value === 'string' &&
-          value.trim() !== '' &&
+          value !== null &&
+          value !== '' &&
           Number.isFinite(
-            Number(value)
+            numericValue
           )
         ) {
-          return Number(value)
+          return numericValue
         }
       }
     }
 
 
+    // --------------------------------------------
+    // answer text fallback
+    // --------------------------------------------
+
     if (
       typeof result.answer === 'string'
     ) {
 
-      const match =
+      const matches =
         result.answer.match(
-          /-?\d[\d,]*(?:\.\d+)?/
+          /-?\d[\d,]*(?:\.\d+)?/g
         )
 
 
-      if (match) {
+      if (
+        matches &&
+        matches.length > 0
+      ) {
+
         return Number(
-          match[0].replace(/,/g, '')
+          matches[0].replace(
+            /,/g,
+            ''
+          )
         )
       }
     }
@@ -292,9 +412,20 @@ function Reports() {
   }
 
 
+  // ============================================================
+  // NORMALIZE TABLE DATA
+  // ============================================================
+
   function normalizeRows(result) {
     if (!result) {
       return []
+    }
+
+
+    if (
+      Array.isArray(result)
+    ) {
+      return result
     }
 
 
@@ -315,9 +446,27 @@ function Reports() {
     }
 
 
+    if (
+      Array.isArray(result.rows)
+    ) {
+      return result.rows
+    }
+
+
+    if (
+      Array.isArray(result.results)
+    ) {
+      return result.results
+    }
+
+
     return []
   }
 
+
+  // ============================================================
+  // GET ROW NAME
+  // ============================================================
 
   function getRowName(row) {
     if (!row) {
@@ -325,20 +474,59 @@ function Reports() {
     }
 
 
-    return (
-      row.name ||
-      row.region ||
-      row.category ||
-      row.product_name ||
-      row.product ||
-      row.Product ||
-      row.Region ||
-      row.Category ||
-      Object.values(row)[0] ||
-      'Unknown'
-    )
+    const possibleKeys = [
+      'name',
+      'region',
+      'category',
+      'product_name',
+      'product',
+      'segment',
+      'state',
+      'city',
+
+      'Name',
+      'Region',
+      'Category',
+      'Product',
+      'Product Name',
+      'Segment',
+      'State',
+      'City',
+    ]
+
+
+    for (
+      const key of possibleKeys
+    ) {
+
+      if (
+        row[key] !== undefined &&
+        row[key] !== null &&
+        String(row[key]).trim() !== ''
+      ) {
+        return row[key]
+      }
+    }
+
+
+    const values =
+      Object.values(row)
+
+
+    if (
+      values.length > 0
+    ) {
+      return values[0]
+    }
+
+
+    return 'Unknown'
   }
 
+
+  // ============================================================
+  // GET ROW VALUE
+  // ============================================================
 
   function getRowValue(row) {
     if (!row) {
@@ -354,6 +542,10 @@ function Reports() {
       'total',
       'amount',
       'total_revenue',
+      'total_profit',
+      'sum',
+      'SUM(sales)',
+      'SUM(profit)',
     ]
 
 
@@ -386,22 +578,17 @@ function Reports() {
       const value of values
     ) {
 
-      if (
-        typeof value === 'number' &&
-        Number.isFinite(value)
-      ) {
-        return value
-      }
-
+      const numericValue =
+        Number(value)
 
       if (
-        typeof value === 'string' &&
-        value.trim() !== '' &&
+        value !== null &&
+        value !== '' &&
         Number.isFinite(
-          Number(value)
+          numericValue
         )
       ) {
-        return Number(value)
+        return numericValue
       }
     }
 
@@ -410,19 +597,27 @@ function Reports() {
   }
 
 
+  // ============================================================
+  // FORMAT CURRENCY
+  // ============================================================
+
   function formatCurrency(value) {
     return new Intl.NumberFormat(
       'en-IN',
       {
         style: 'currency',
         currency: 'INR',
-        maximumFractionDigits: 0,
+        maximumFractionDigits: 2,
       }
     ).format(
       Number(value) || 0
     )
   }
 
+
+  // ============================================================
+  // FORMAT NUMBER
+  // ============================================================
 
   function formatNumber(value) {
     return new Intl.NumberFormat(
@@ -433,92 +628,476 @@ function Reports() {
   }
 
 
-  function downloadReport() {
+  // ============================================================
+  // PREPARE REGIONAL DATA FOR EXCEL
+  // ============================================================
 
-    const report = {
-      report: reportType,
-      period,
-      generated_at:
-        new Date().toISOString(),
+  function prepareRegionRows() {
+    return regionData.map(
+      (row) => ({
+        Region:
+          String(
+            getRowName(row)
+          ),
 
-      source:
-        'MetricMind Dataset',
-
-      summary: {
-        total_revenue:
-          kpis.revenue,
-
-        total_profit:
-          kpis.profit,
-
-        total_orders:
-          kpis.orders,
-
-        total_customers:
-          kpis.customers,
-      },
-
-      regional_data:
-        regionData,
-
-      category_data:
-        categoryData,
-
-      product_data:
-        productData,
-    }
-
-
-    const blob = new Blob(
-      [
-        JSON.stringify(
-          report,
-          null,
-          2
-        ),
-      ],
-      {
-        type:
-          'application/json',
-      }
-    )
-
-
-    const url =
-      URL.createObjectURL(blob)
-
-
-    const link =
-      document.createElement('a')
-
-
-    link.href = url
-
-    link.download =
-      'metricmind-report.json'
-
-
-    document.body.appendChild(
-      link
-    )
-
-    link.click()
-
-    document.body.removeChild(
-      link
-    )
-
-
-    URL.revokeObjectURL(
-      url
+        Revenue:
+          Number(
+            getRowValue(row)
+          ),
+      })
     )
   }
 
 
+  // ============================================================
+  // PREPARE CATEGORY DATA FOR EXCEL
+  // ============================================================
+
+  function prepareCategoryRows() {
+    return categoryData.map(
+      (row) => ({
+        Category:
+          String(
+            getRowName(row)
+          ),
+
+        Revenue:
+          Number(
+            getRowValue(row)
+          ),
+      })
+    )
+  }
+
+
+  // ============================================================
+  // PREPARE PRODUCT DATA FOR EXCEL
+  // ============================================================
+
+  function prepareProductRows() {
+    return productData
+      .slice(0, 10)
+      .map(
+        (row, index) => ({
+          Rank:
+            index + 1,
+
+          Product:
+            String(
+              getRowName(row)
+            ),
+
+          Value:
+            Number(
+              getRowValue(row)
+            ),
+        })
+      )
+  }
+
+
+  // ============================================================
+  // DOWNLOAD EXCEL REPORT
+  // ============================================================
+
+  function downloadReport() {
+    try {
+      setDownloading(true)
+      setError('')
+      setSuccess('')
+
+
+      // --------------------------------------------------------
+      // CREATE WORKBOOK
+      // --------------------------------------------------------
+
+      const workbook =
+        XLSX.utils.book_new()
+
+
+      // --------------------------------------------------------
+      // SUMMARY SHEET
+      // --------------------------------------------------------
+
+      const summaryRows = [
+        ['MetricMind Business Report'],
+        [],
+        ['Report Type', reportType],
+        ['Period', period],
+        [
+          'Generated At',
+          new Date().toLocaleString(
+            'en-IN'
+          ),
+        ],
+        [],
+        ['Business Summary'],
+        [],
+        ['Metric', 'Value'],
+        [
+          'Total Revenue',
+          kpis.revenue,
+        ],
+        [
+          'Total Profit',
+          kpis.profit,
+        ],
+        [
+          'Total Orders',
+          kpis.orders,
+        ],
+        [
+          'Total Customers',
+          kpis.customers,
+        ],
+        [],
+        [
+          'Regional Records',
+          regionData.length,
+        ],
+        [
+          'Category Records',
+          categoryData.length,
+        ],
+        [
+          'Top Product Records',
+          Math.min(
+            productData.length,
+            10
+          ),
+        ],
+      ]
+
+
+      const summarySheet =
+        XLSX.utils.aoa_to_sheet(
+          summaryRows
+        )
+
+
+      summarySheet['!cols'] = [
+        { wch: 28 },
+        { wch: 28 },
+      ]
+
+
+      // --------------------------------------------------------
+      // REGION SHEET
+      // --------------------------------------------------------
+
+      const regionRows =
+        prepareRegionRows()
+
+
+      const regionSheet =
+        XLSX.utils.json_to_sheet(
+          regionRows.length > 0
+            ? regionRows
+            : [
+                {
+                  Region:
+                    'No data available',
+                  Revenue: 0,
+                },
+              ]
+        )
+
+
+      regionSheet['!cols'] = [
+        { wch: 28 },
+        { wch: 20 },
+      ]
+
+
+      // --------------------------------------------------------
+      // CATEGORY SHEET
+      // --------------------------------------------------------
+
+      const categoryRows =
+        prepareCategoryRows()
+
+
+      const categorySheet =
+        XLSX.utils.json_to_sheet(
+          categoryRows.length > 0
+            ? categoryRows
+            : [
+                {
+                  Category:
+                    'No data available',
+                  Revenue: 0,
+                },
+              ]
+        )
+
+
+      categorySheet['!cols'] = [
+        { wch: 30 },
+        { wch: 20 },
+      ]
+
+
+      // --------------------------------------------------------
+      // PRODUCT SHEET
+      // --------------------------------------------------------
+
+      const productRows =
+        prepareProductRows()
+
+
+      const productSheet =
+        XLSX.utils.json_to_sheet(
+          productRows.length > 0
+            ? productRows
+            : [
+                {
+                  Rank: '',
+                  Product:
+                    'No data available',
+                  Value: 0,
+                },
+              ]
+        )
+
+
+      productSheet['!cols'] = [
+        { wch: 10 },
+        { wch: 55 },
+        { wch: 20 },
+      ]
+
+
+      // --------------------------------------------------------
+      // ADD FILTERS
+      // --------------------------------------------------------
+
+      if (regionRows.length > 0) {
+        regionSheet['!autofilter'] = {
+          ref:
+            `A1:B${regionRows.length + 1}`,
+        }
+      }
+
+
+      if (categoryRows.length > 0) {
+        categorySheet['!autofilter'] = {
+          ref:
+            `A1:B${categoryRows.length + 1}`,
+        }
+      }
+
+
+      if (productRows.length > 0) {
+        productSheet['!autofilter'] = {
+          ref:
+            `A1:C${productRows.length + 1}`,
+        }
+      }
+
+
+      // --------------------------------------------------------
+      // FREEZE HEADER ROWS
+      // --------------------------------------------------------
+
+      regionSheet['!freeze'] = {
+        xSplit: 0,
+        ySplit: 1,
+      }
+
+
+      categorySheet['!freeze'] = {
+        xSplit: 0,
+        ySplit: 1,
+      }
+
+
+      productSheet['!freeze'] = {
+        xSplit: 0,
+        ySplit: 1,
+      }
+
+
+      // --------------------------------------------------------
+      // FORMAT CURRENCY CELLS
+      // --------------------------------------------------------
+
+      function applyCurrencyFormat(
+        sheet,
+        column,
+        startRow,
+        endRow
+      ) {
+
+        for (
+          let row = startRow;
+          row <= endRow;
+          row++
+        ) {
+
+          const cell =
+            sheet[
+              `${column}${row}`
+            ]
+
+          if (cell) {
+            cell.z =
+              '₹#,##0.00'
+          }
+        }
+      }
+
+
+      if (regionRows.length > 0) {
+        applyCurrencyFormat(
+          regionSheet,
+          'B',
+          2,
+          regionRows.length + 1
+        )
+      }
+
+
+      if (categoryRows.length > 0) {
+        applyCurrencyFormat(
+          categorySheet,
+          'B',
+          2,
+          categoryRows.length + 1
+        )
+      }
+
+
+      if (productRows.length > 0) {
+        applyCurrencyFormat(
+          productSheet,
+          'C',
+          2,
+          productRows.length + 1
+        )
+      }
+
+
+      // --------------------------------------------------------
+      // SUMMARY CURRENCY FORMAT
+      // --------------------------------------------------------
+
+      if (summarySheet['B10']) {
+        summarySheet['B10'].z =
+          '₹#,##0.00'
+      }
+
+      if (summarySheet['B11']) {
+        summarySheet['B11'].z =
+          '₹#,##0.00'
+      }
+
+
+      // --------------------------------------------------------
+      // ADD SHEETS TO WORKBOOK
+      // --------------------------------------------------------
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        summarySheet,
+        'Summary'
+      )
+
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        regionSheet,
+        'Regional Performance'
+      )
+
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        categorySheet,
+        'Category Performance'
+      )
+
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        productSheet,
+        'Top Products'
+      )
+
+
+      // --------------------------------------------------------
+      // CREATE FILE NAME
+      // --------------------------------------------------------
+
+      const safeReportType =
+        reportType
+          .replace(
+            /[^a-z0-9]+/gi,
+            '-'
+          )
+          .replace(
+            /^-|-$/g,
+            ''
+          )
+          .toLowerCase()
+
+
+      const safePeriod =
+        period
+          .replace(
+            /[^a-z0-9]+/gi,
+            '-'
+          )
+          .replace(
+            /^-|-$/g,
+            ''
+          )
+          .toLowerCase()
+
+
+      const fileName =
+        `metricmind-${safeReportType}-${safePeriod}.xlsx`
+
+
+      // --------------------------------------------------------
+      // DOWNLOAD
+      // --------------------------------------------------------
+
+      XLSX.writeFile(
+        workbook,
+        fileName
+      )
+
+
+      setSuccess(
+        `Report downloaded successfully as ${fileName}`
+      )
+
+    } catch (error) {
+      console.error(
+        'Report download error:',
+        error
+      )
+
+      setError(
+        'Unable to create the Excel report. Please try again.'
+      )
+
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+
+  // ============================================================
+  // UI
+  // ============================================================
+
   return (
     <div className="reports-page">
 
-      {/* HEADER */}
+      {/* ======================================================
+          HEADER
+      ======================================================= */}
 
       <div className="reports-header">
 
@@ -582,20 +1161,47 @@ function Reports() {
       </div>
 
 
-      {/* ERROR */}
+      {/* ======================================================
+          SUCCESS
+      ======================================================= */}
 
-      {error && (
+      {success && (
 
-        <div className="report-error">
+        <div className="report-success">
 
-          {error}
+          <CheckCircle size={18} />
+
+          <span>
+            {success}
+          </span>
 
         </div>
 
       )}
 
 
-      {/* CONTROLS */}
+      {/* ======================================================
+          ERROR
+      ======================================================= */}
+
+      {error && (
+
+        <div className="report-error">
+
+          <AlertCircle size={18} />
+
+          <span>
+            {error}
+          </span>
+
+        </div>
+
+      )}
+
+
+      {/* ======================================================
+          CONTROLS
+      ======================================================= */}
 
       <div className="report-controls">
 
@@ -701,7 +1307,9 @@ function Reports() {
       </div>
 
 
-      {/* KPI CARDS */}
+      {/* ======================================================
+          KPI CARDS
+      ======================================================= */}
 
       <div className="report-kpis">
 
@@ -807,12 +1415,16 @@ function Reports() {
       </div>
 
 
-      {/* DATA TABLES */}
+      {/* ======================================================
+          REPORT GRID
+      ======================================================= */}
 
       <div className="report-grid">
 
 
-        {/* REGIONS */}
+        {/* ====================================================
+            REGIONAL PERFORMANCE
+        ===================================================== */}
 
         <div className="report-card">
 
@@ -857,6 +1469,7 @@ function Reports() {
                 <thead>
 
                   <tr>
+
                     <th>
                       Region
                     </th>
@@ -864,6 +1477,7 @@ function Reports() {
                     <th>
                       Revenue
                     </th>
+
                   </tr>
 
                 </thead>
@@ -912,7 +1526,9 @@ function Reports() {
         </div>
 
 
-        {/* CATEGORY */}
+        {/* ====================================================
+            CATEGORY PERFORMANCE
+        ===================================================== */}
 
         <div className="report-card">
 
@@ -1013,7 +1629,9 @@ function Reports() {
         </div>
 
 
-        {/* TOP PRODUCTS */}
+        {/* ====================================================
+            TOP PRODUCTS
+        ===================================================== */}
 
         <div className="report-card">
 
@@ -1063,7 +1681,7 @@ function Reports() {
                     </th>
 
                     <th>
-                      Value
+                      Profit
                     </th>
 
                   </tr>
@@ -1116,7 +1734,9 @@ function Reports() {
         </div>
 
 
-        {/* REPORT SUMMARY */}
+        {/* ====================================================
+            REPORT SUMMARY
+        ===================================================== */}
 
         <div className="report-card">
 
@@ -1203,15 +1823,36 @@ function Reports() {
           </div>
 
 
+          {/* ==================================================
+              EXCEL DOWNLOAD
+          =================================================== */}
+
           <button
             className="download-report-button"
             type="button"
             onClick={downloadReport}
+            disabled={
+              loading ||
+              downloading
+            }
           >
 
-            <Download size={18} />
+            {downloading ? (
+              <>
+                <RefreshCw
+                  size={18}
+                  className="spin"
+                />
 
-            Download Report
+                Creating Excel Report...
+              </>
+            ) : (
+              <>
+                <Download size={18} />
+
+                Download Excel Report
+              </>
+            )}
 
           </button>
 
