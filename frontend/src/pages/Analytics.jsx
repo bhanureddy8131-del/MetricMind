@@ -1,366 +1,38 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
+  ResponsiveContainer,
   BarChart,
   Bar,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+  Cell,
 } from 'recharts'
 import {
-  RefreshCw,
+  BarChart3,
   TrendingUp,
   DollarSign,
   ShoppingCart,
   Users,
   Activity,
-  AlertCircle,
+  RefreshCw,
+  ArrowUpRight,
+  Database,
+  CircleDollarSign,
 } from 'lucide-react'
 
 import { apiService } from '../services/api'
 import { useTheme } from '../context/ThemeContext'
 import './Analytics.css'
 
-/* =========================================================
-   HELPERS
-========================================================= */
-
-const getPayload = (response) => {
-  if (!response) return null
-  return response.data ?? response
-}
-
-const getNumber = (value) => {
-  if (value === null || value === undefined || value === '') return 0
-
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0
-  }
-
-  const cleaned = String(value).replace(/[$,%\s,]/g, '')
-  const number = Number(cleaned)
-
-  return Number.isFinite(number) ? number : 0
-}
-
-const formatNumber = (value) => {
-  return new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: 0,
-  }).format(getNumber(value))
-}
-
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(getNumber(value))
-}
-
-/* =========================================================
-   REGION NORMALIZER
-========================================================= */
-
-const normalizeRegionData = (response) => {
-  const payload = getPayload(response)
-
-  console.log('REGION API RAW RESPONSE:', payload)
-
-  if (!payload) return []
-
-  let rows = []
-
-  /* Array directly */
-  if (Array.isArray(payload)) {
-    rows = payload
-  }
-
-  /* Common API wrappers */
-  else if (Array.isArray(payload.data)) {
-    rows = payload.data
-  }
-
-  else if (Array.isArray(payload.results)) {
-    rows = payload.results
-  }
-
-  else if (Array.isArray(payload.rows)) {
-    rows = payload.rows
-  }
-
-  else if (Array.isArray(payload.items)) {
-    rows = payload.items
-  }
-
-  /* Nested region data */
-  else if (Array.isArray(payload.regions)) {
-    rows = payload.regions
-  }
-
-  else if (Array.isArray(payload.region_data)) {
-    rows = payload.region_data
-  }
-
-  else if (Array.isArray(payload.sales_by_region)) {
-    rows = payload.sales_by_region
-  }
-
-  /* Object format:
-     {
-       "West": 710000,
-       "East": 680000,
-       ...
-     }
-  */
-  else if (
-    typeof payload === 'object' &&
-    !Array.isArray(payload)
-  ) {
-    const regionNames = [
-      'West',
-      'East',
-      'Central',
-      'South',
-    ]
-
-    const objectRows = regionNames
-      .filter((region) => payload[region] !== undefined)
-      .map((region) => ({
-        name: region,
-        value: getNumber(payload[region]),
-      }))
-
-    if (objectRows.length > 0) {
-      console.log('REGION OBJECT FORMAT:', objectRows)
-      return objectRows
-    }
-  }
-
-  const normalized = rows
-    .map((row) => {
-      if (!row || typeof row !== 'object') return null
-
-      const name =
-        row.name ??
-        row.region ??
-        row.Region ??
-        row.label ??
-        row.region_name ??
-        row.RegionName
-
-      const value =
-        row.value ??
-        row.revenue ??
-        row.sales ??
-        row.Sales ??
-        row.total ??
-        row.amount ??
-        row.total_sales ??
-        row.total_revenue
-
-      if (!name) return null
-
-      return {
-        name: String(name),
-        value: getNumber(value),
-      }
-    })
-    .filter(Boolean)
-
-  console.log('REGION NORMALIZED:', normalized)
-
-  return normalized
-}
-
-/* =========================================================
-   CATEGORY NORMALIZER
-========================================================= */
-
-const normalizeCategoryData = (response) => {
-  const payload = getPayload(response)
-
-  console.log('CATEGORY API RAW RESPONSE:', payload)
-
-  if (!payload) return []
-
-  let rows = []
-
-  if (Array.isArray(payload)) {
-    rows = payload
-  } else if (Array.isArray(payload.data)) {
-    rows = payload.data
-  } else if (Array.isArray(payload.results)) {
-    rows = payload.results
-  } else if (Array.isArray(payload.rows)) {
-    rows = payload.rows
-  } else if (Array.isArray(payload.items)) {
-    rows = payload.items
-  } else if (Array.isArray(payload.categories)) {
-    rows = payload.categories
-  } else if (Array.isArray(payload.category_data)) {
-    rows = payload.category_data
-  } else if (Array.isArray(payload.sales_by_category)) {
-    rows = payload.sales_by_category
-  } else if (
-    typeof payload === 'object' &&
-    !Array.isArray(payload)
-  ) {
-    const categoryNames = [
-      'Technology',
-      'Furniture',
-      'Office Supplies',
-    ]
-
-    const objectRows = categoryNames
-      .filter((category) => payload[category] !== undefined)
-      .map((category) => ({
-        name: category,
-        value: getNumber(payload[category]),
-      }))
-
-    if (objectRows.length > 0) {
-      return objectRows
-    }
-  }
-
-  return rows
-    .map((row) => {
-      if (!row || typeof row !== 'object') return null
-
-      const name =
-        row.name ??
-        row.category ??
-        row.Category ??
-        row.label ??
-        row.category_name
-
-      const value =
-        row.value ??
-        row.revenue ??
-        row.sales ??
-        row.Sales ??
-        row.total ??
-        row.amount ??
-        row.total_sales ??
-        row.total_revenue
-
-      if (!name) return null
-
-      return {
-        name: String(name),
-        value: getNumber(value),
-      }
-    })
-    .filter(Boolean)
-}
-
-/* =========================================================
-   TREND NORMALIZER
-========================================================= */
-
-const normalizeTrendData = (response) => {
-  const payload = getPayload(response)
-
-  if (!payload) return []
-
-  let rows = []
-
-  if (Array.isArray(payload)) {
-    rows = payload
-  } else if (Array.isArray(payload.data)) {
-    rows = payload.data
-  } else if (Array.isArray(payload.results)) {
-    rows = payload.results
-  } else if (Array.isArray(payload.rows)) {
-    rows = payload.rows
-  } else if (Array.isArray(payload.items)) {
-    rows = payload.items
-  } else if (Array.isArray(payload.trend)) {
-    rows = payload.trend
-  }
-
-  return rows
-    .map((row) => {
-      if (!row || typeof row !== 'object') return null
-
-      const name =
-        row.name ??
-        row.month ??
-        row.label ??
-        row.period ??
-        row.date
-
-      const revenue =
-        row.revenue ??
-        row.sales ??
-        row.value ??
-        row.total ??
-        0
-
-      if (!name) return null
-
-      return {
-        name: String(name),
-        revenue: getNumber(revenue),
-      }
-    })
-    .filter(Boolean)
-}
-
-/* =========================================================
-   KPI NORMALIZER
-========================================================= */
-
-const normalizeKPIs = (response) => {
-  const payload = getPayload(response)
-
-  if (!payload) {
-    return {
-      revenue: 0,
-      profit: 0,
-      orders: 0,
-      customers: 0,
-    }
-  }
-
-  const source = payload.data ?? payload
-
-  return {
-    revenue: getNumber(
-      source.revenue ??
-      source.total_revenue ??
-      source.sales ??
-      0
-    ),
-
-    profit: getNumber(
-      source.profit ??
-      source.total_profit ??
-      0
-    ),
-
-    orders: getNumber(
-      source.orders ??
-      source.total_orders ??
-      source.order_count ??
-      0
-    ),
-
-    customers: getNumber(
-      source.customers ??
-      source.total_customers ??
-      source.customer_count ??
-      0
-    ),
-  }
-}
-
-/* =========================================================
-   FALLBACK DATA
-========================================================= */
+const COLORS = ['#3155ff', '#6c63ff', '#00b8d9', '#8b5cf6', '#14b8a6']
 
 const DEFAULT_REGIONS = [
   { name: 'West', value: 0 },
@@ -376,48 +48,119 @@ const DEFAULT_CATEGORIES = [
 ]
 
 const DEFAULT_TREND = [
-  { name: 'Jan', revenue: 18000 },
-  { name: 'Feb', revenue: 23000 },
-  { name: 'Mar', revenue: 28000 },
-  { name: 'Apr', revenue: 26000 },
-  { name: 'May', revenue: 34000 },
-  { name: 'Jun', revenue: 39000 },
+  { name: 'Jan', revenue: 0 },
+  { name: 'Feb', revenue: 0 },
+  { name: 'Mar', revenue: 0 },
+  { name: 'Apr', revenue: 0 },
+  { name: 'May', revenue: 0 },
+  { name: 'Jun', revenue: 0 },
 ]
 
-/* =========================================================
-   TOOLTIP
-========================================================= */
+function getPayload(response) {
+  return response?.data?.data ?? response?.data ?? response ?? []
+}
 
-const CustomTooltip = ({ active, payload, label }) => {
+function getNumber(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(getNumber(value))
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 0,
+  }).format(getNumber(value))
+}
+
+function normalizeRegionData(response) {
+  const payload = getPayload(response)
+
+  if (!Array.isArray(payload) || payload.length === 0) {
+    return DEFAULT_REGIONS
+  }
+
+  return payload.map((item) => ({
+    name: item.region ?? item.name ?? 'Unknown',
+    value: getNumber(item.sales ?? item.value ?? item.revenue),
+  }))
+}
+
+function normalizeCategoryData(response) {
+  const payload = getPayload(response)
+
+  if (!Array.isArray(payload) || payload.length === 0) {
+    return DEFAULT_CATEGORIES
+  }
+
+  return payload.map((item) => ({
+    name: item.category ?? item.name ?? 'Unknown',
+    value: getNumber(item.sales ?? item.value ?? item.revenue),
+  }))
+}
+
+function normalizeTrendData(response) {
+  const payload = getPayload(response)
+
+  if (!Array.isArray(payload) || payload.length === 0) {
+    return DEFAULT_TREND
+  }
+
+  return payload.map((item) => ({
+    name: item.name ?? item.period ?? item.date ?? 'Unknown',
+    revenue: getNumber(
+      item.revenue ??
+        item.sales ??
+        item.value ??
+        item.total
+    ),
+  }))
+}
+
+function normalizeKPIs(response) {
+  const data = response?.data?.data ?? response?.data ?? response ?? {}
+
+  return {
+    revenue: getNumber(data.revenue),
+    profit: getNumber(data.profit),
+    orders: getNumber(data.orders),
+    customers: getNumber(data.customers),
+  }
+}
+
+function CustomTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) {
     return null
   }
 
   return (
     <div className="analytics-tooltip">
-      <strong>{label}</strong>
+      <div className="tooltip-label">{label}</div>
 
-      <div>
-        {formatCurrency(payload[0]?.value)}
-      </div>
+      {payload.map((entry, index) => (
+        <div className="tooltip-row" key={index}>
+          <span>{entry.name || 'Value'}</span>
+          <strong>
+            {formatCurrency(entry.value)}
+          </strong>
+        </div>
+      ))}
     </div>
   )
 }
 
-/* =========================================================
-   ANALYTICS PAGE
-========================================================= */
-
-const Analytics = () => {
+function Analytics() {
   const { dark } = useTheme()
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [apiOnline, setApiOnline] = useState(false)
-
-  const [metric, setMetric] = useState('revenue')
-  const [regionFilter, setRegionFilter] = useState('all')
-  const [categoryFilter, setCategoryFilter] = useState('all')
 
   const [kpis, setKpis] = useState({
     revenue: 0,
@@ -426,95 +169,59 @@ const Analytics = () => {
     customers: 0,
   })
 
-  const [regionData, setRegionData] =
-    useState(DEFAULT_REGIONS)
+  const [regions, setRegions] = useState(DEFAULT_REGIONS)
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
+  const [trend, setTrend] = useState(DEFAULT_TREND)
 
-  const [categoryData, setCategoryData] =
-    useState(DEFAULT_CATEGORIES)
+  const [regionFilter, setRegionFilter] = useState('All')
+  const [categoryFilter, setCategoryFilter] = useState('All')
+  const [metricFilter, setMetricFilter] = useState('Revenue')
 
-  const [trendData, setTrendData] =
-    useState(DEFAULT_TREND)
-
-  /* =======================================================
-     LOAD DATA
-  ======================================================= */
-
-  const loadAnalytics = async () => {
+  const loadAnalytics = async (isRefresh = false) => {
     try {
-      setRefreshing(true)
-
-      const healthResponse =
-        await apiService.health()
-
-      if (healthResponse) {
-        setApiOnline(true)
+      if (isRefresh) {
+        setRefreshing(true)
+      } else {
+        setLoading(true)
       }
 
-      const results = await Promise.allSettled([
+      const healthResponse = await apiService.health()
+
+      setApiOnline(
+        healthResponse?.status === 200 ||
+        healthResponse?.data?.status === 'ok' ||
+        healthResponse?.data?.status === 'healthy'
+      )
+
+      const [
+        kpiResponse,
+        regionResponse,
+        categoryResponse,
+        trendResponse,
+      ] = await Promise.allSettled([
         apiService.getDashboardKPIs(),
         apiService.getSalesByRegion(),
         apiService.getSalesByCategory(),
         apiService.getSalesTrend('month'),
       ])
 
-      /* KPI */
-      if (results[0].status === 'fulfilled') {
-        const newKpis =
-          normalizeKPIs(results[0].value)
-
-        setKpis(newKpis)
+      if (kpiResponse.status === 'fulfilled') {
+        setKpis(normalizeKPIs(kpiResponse.value))
       }
 
-      /* REGION */
-      if (results[1].status === 'fulfilled') {
-        const regions =
-          normalizeRegionData(results[1].value)
-
-        if (regions.length > 0) {
-          setRegionData(regions)
-        }
-
-        console.log(
-          'MetricMind REGION FINAL:',
-          regions
-        )
-      } else {
-        console.error(
-          'Region API error:',
-          results[1].reason
-        )
+      if (regionResponse.status === 'fulfilled') {
+        setRegions(normalizeRegionData(regionResponse.value))
       }
 
-      /* CATEGORY */
-      if (results[2].status === 'fulfilled') {
-        const categories =
-          normalizeCategoryData(results[2].value)
-
-        if (categories.length > 0) {
-          setCategoryData(categories)
-        }
-      } else {
-        console.error(
-          'Category API error:',
-          results[2].reason
-        )
+      if (categoryResponse.status === 'fulfilled') {
+        setCategories(normalizeCategoryData(categoryResponse.value))
       }
 
-      /* TREND */
-      if (results[3].status === 'fulfilled') {
-        const trend =
-          normalizeTrendData(results[3].value)
-
-        if (trend.length > 0) {
-          setTrendData(trend)
-        }
+      if (trendResponse.status === 'fulfilled') {
+        setTrend(normalizeTrendData(trendResponse.value))
       }
     } catch (error) {
-      console.error(
-        'Analytics loading error:',
-        error
-      )
-
+      console.error('Analytics loading error:', error)
       setApiOnline(false)
     } finally {
       setLoading(false)
@@ -526,306 +233,315 @@ const Analytics = () => {
     loadAnalytics()
   }, [])
 
-  /* =======================================================
-     FILTER REGION
-  ======================================================= */
-
-  const filteredRegionData = useMemo(() => {
-    if (regionFilter === 'all') {
-      return regionData
+  const filteredRegions = useMemo(() => {
+    if (regionFilter === 'All') {
+      return regions
     }
 
-    return regionData.filter(
-      (item) =>
-        item.name.toLowerCase() ===
-        regionFilter.toLowerCase()
+    return regions.filter(
+      (item) => item.name === regionFilter
     )
-  }, [regionData, regionFilter])
+  }, [regions, regionFilter])
 
-  /* =======================================================
-     FILTER CATEGORY
-  ======================================================= */
-
-  const filteredCategoryData = useMemo(() => {
-    if (categoryFilter === 'all') {
-      return categoryData
+  const filteredCategories = useMemo(() => {
+    if (categoryFilter === 'All') {
+      return categories
     }
 
-    return categoryData.filter(
-      (item) =>
-        item.name.toLowerCase() ===
-        categoryFilter.toLowerCase()
+    return categories.filter(
+      (item) => item.name === categoryFilter
     )
-  }, [categoryData, categoryFilter])
+  }, [categories, categoryFilter])
 
-  /* =======================================================
-     RENDER
-  ======================================================= */
+  const categoryTotal = categories.reduce(
+    (sum, item) => sum + getNumber(item.value),
+    0
+  )
 
   return (
-    <div
-      className={`analytics-page ${
-        dark
-          ? 'analytics-dark'
-          : 'analytics-light'
-      }`}
-    >
+    <div className={`analytics-page ${dark ? 'analytics-dark' : 'analytics-light'}`}>
 
       {/* HEADER */}
       <div className="analytics-header">
 
-        <div>
-          <div className="analytics-title-row">
-            <Activity size={30} />
-
-            <h1>Analytics</h1>
+        <div className="analytics-heading">
+          <div className="analytics-title-icon">
+            <BarChart3 size={26} />
           </div>
 
-          <p>
-            Explore your business performance
-            and sales insights.
-          </p>
+          <div>
+            <div className="analytics-eyebrow">
+              METRICMIND INTELLIGENCE
+            </div>
+
+            <h1>Analytics</h1>
+
+            <p>
+              Explore your business performance through live data insights.
+            </p>
+          </div>
         </div>
 
-        <button
-          className="analytics-refresh-btn"
-          onClick={loadAnalytics}
-          disabled={refreshing}
-        >
-          <RefreshCw
-            size={18}
-            className={
-              refreshing
-                ? 'analytics-spin'
-                : ''
-            }
-          />
+        <div className="analytics-header-actions">
 
-          {refreshing
-            ? 'Refreshing...'
-            : 'Refresh'}
-        </button>
+          <div className={`api-status ${apiOnline ? 'online' : 'offline'}`}>
+            <span className="status-dot"></span>
 
-      </div>
+            <span>
+              {apiOnline ? 'Live Data' : 'Offline'}
+            </span>
+          </div>
 
-      {/* API STATUS */}
-      <div
-        className={`analytics-api-status ${
-          apiOnline
-            ? 'online'
-            : 'offline'
-        }`}
-      >
-        <span className="analytics-status-dot" />
-
-        {apiOnline
-          ? 'Backend API Connected'
-          : 'Backend API Offline'}
-
-        {!apiOnline && (
-          <span>
-            — Start FastAPI on port 8001
-          </span>
-        )}
-      </div>
-
-      {/* FILTERS */}
-      <div className="analytics-filter-card">
-
-        <div className="analytics-filter">
-
-          <label>Metric</label>
-
-          <select
-            value={metric}
-            onChange={(e) =>
-              setMetric(e.target.value)
-            }
+          <button
+            className="refresh-button"
+            onClick={() => loadAnalytics(true)}
+            disabled={refreshing}
           >
-            <option value="revenue">
-              Revenue
-            </option>
+            <RefreshCw
+              size={17}
+              className={refreshing ? 'spin' : ''}
+            />
 
-            <option value="profit">
-              Profit
-            </option>
-
-            <option value="quantity">
-              Quantity
-            </option>
-          </select>
+            {refreshing ? 'Refreshing' : 'Refresh'}
+          </button>
 
         </div>
-
-        <div className="analytics-filter">
-
-          <label>Region</label>
-
-          <select
-            value={regionFilter}
-            onChange={(e) =>
-              setRegionFilter(e.target.value)
-            }
-          >
-            <option value="all">
-              All Regions
-            </option>
-
-            {regionData.map((region) => (
-              <option
-                key={region.name}
-                value={region.name}
-              >
-                {region.name}
-              </option>
-            ))}
-          </select>
-
-        </div>
-
-        <div className="analytics-filter">
-
-          <label>Category</label>
-
-          <select
-            value={categoryFilter}
-            onChange={(e) =>
-              setCategoryFilter(e.target.value)
-            }
-          >
-            <option value="all">
-              All Categories
-            </option>
-
-            {categoryData.map((category) => (
-              <option
-                key={category.name}
-                value={category.name}
-              >
-                {category.name}
-              </option>
-            ))}
-          </select>
-
-        </div>
-
-        <div className="analytics-filter-info">
-          <TrendingUp size={18} />
-
-          <span>
-            Interactive business analytics
-          </span>
-        </div>
-
       </div>
 
       {/* KPI CARDS */}
-      <div className="analytics-stats-grid">
+      <section className="kpi-grid">
 
-        <div className="analytics-stat-card">
-
-          <div className="analytics-stat-icon">
-            <DollarSign size={22} />
-          </div>
-
-          <div>
-            <span>Revenue</span>
-
-            <strong>
-              {formatCurrency(kpis.revenue)}
-            </strong>
-          </div>
-
-        </div>
-
-        <div className="analytics-stat-card">
-
-          <div className="analytics-stat-icon">
-            <TrendingUp size={22} />
-          </div>
-
-          <div>
-            <span>Profit</span>
-
-            <strong>
-              {formatCurrency(kpis.profit)}
-            </strong>
-          </div>
-
-        </div>
-
-        <div className="analytics-stat-card">
-
-          <div className="analytics-stat-icon">
-            <ShoppingCart size={22} />
-          </div>
-
-          <div>
-            <span>Orders</span>
-
-            <strong>
-              {formatNumber(kpis.orders)}
-            </strong>
-          </div>
-
-        </div>
-
-        <div className="analytics-stat-card">
-
-          <div className="analytics-stat-icon">
-            <Users size={22} />
-          </div>
-
-          <div>
-            <span>Customers</span>
-
-            <strong>
-              {formatNumber(kpis.customers)}
-            </strong>
-          </div>
-
-        </div>
-
-      </div>
-
-      {/* CHARTS */}
-      <div className="analytics-chart-grid">
-
-        {/* SALES TREND */}
-        <div className="analytics-chart-card analytics-wide">
-
-          <div className="analytics-chart-header">
-
-            <div>
-              <h2>Sales Trend</h2>
-
-              <p>
-                Monthly revenue performance
-              </p>
+        <div className="kpi-card kpi-blue">
+          <div className="kpi-top">
+            <div className="kpi-icon">
+              <DollarSign size={21} />
             </div>
 
-            <TrendingUp size={22} />
+            <span className="kpi-badge">
+              Revenue
+            </span>
+          </div>
+
+          <div className="kpi-value">
+            {loading ? '—' : formatCurrency(kpis.revenue)}
+          </div>
+
+          <div className="kpi-bottom">
+            <TrendingUp size={15} />
+            <span>Total sales generated</span>
+          </div>
+        </div>
+
+        <div className="kpi-card kpi-purple">
+          <div className="kpi-top">
+            <div className="kpi-icon">
+              <CircleDollarSign size={21} />
+            </div>
+
+            <span className="kpi-badge">
+              Profit
+            </span>
+          </div>
+
+          <div className="kpi-value">
+            {loading ? '—' : formatCurrency(kpis.profit)}
+          </div>
+
+          <div className="kpi-bottom">
+            <TrendingUp size={15} />
+            <span>Net business profit</span>
+          </div>
+        </div>
+
+        <div className="kpi-card kpi-cyan">
+          <div className="kpi-top">
+            <div className="kpi-icon">
+              <ShoppingCart size={21} />
+            </div>
+
+            <span className="kpi-badge">
+              Orders
+            </span>
+          </div>
+
+          <div className="kpi-value">
+            {loading ? '—' : formatNumber(kpis.orders)}
+          </div>
+
+          <div className="kpi-bottom">
+            <Activity size={15} />
+            <span>Total unique orders</span>
+          </div>
+        </div>
+
+        <div className="kpi-card kpi-green">
+          <div className="kpi-top">
+            <div className="kpi-icon">
+              <Users size={21} />
+            </div>
+
+            <span className="kpi-badge">
+              Customers
+            </span>
+          </div>
+
+          <div className="kpi-value">
+            {loading ? '—' : formatNumber(kpis.customers)}
+          </div>
+
+          <div className="kpi-bottom">
+            <Users size={15} />
+            <span>Unique customers</span>
+          </div>
+        </div>
+
+      </section>
+
+      {/* FILTER BAR */}
+      <section className="analytics-toolbar">
+
+        <div className="toolbar-left">
+          <div className="toolbar-icon">
+            <Activity size={18} />
+          </div>
+
+          <div>
+            <strong>Performance Explorer</strong>
+            <span>Filter and analyze your dataset</span>
+          </div>
+        </div>
+
+        <div className="filters">
+
+          <label>
+            <span>Region</span>
+
+            <select
+              value={regionFilter}
+              onChange={(e) => setRegionFilter(e.target.value)}
+            >
+              <option value="All">All regions</option>
+
+              {regions.map((item) => (
+                <option
+                  key={item.name}
+                  value={item.name}
+                >
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Category</span>
+
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+            >
+              <option value="All">All categories</option>
+
+              {categories.map((item) => (
+                <option
+                  key={item.name}
+                  value={item.name}
+                >
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Metric</span>
+
+           <select
+  value={metricFilter}
+  onChange={(e) => setMetricFilter(e.target.value)}
+>
+  <option value="Revenue">Revenue</option>
+  <option value="Profit">Profit</option>
+  <option value="Orders">Orders</option>
+  <option value="Customers">Customers</option>
+</select>
+          </label>
+
+        </div>
+      </section>
+
+      {/* MAIN CHART GRID */}
+      <section className="chart-grid">
+
+        {/* REVENUE TREND */}
+        <div className="chart-card chart-wide">
+
+          <div className="chart-header">
+
+            <div>
+              <div className="chart-title-row">
+                <div className="chart-small-icon blue">
+                  <TrendingUp size={18} />
+                </div>
+
+                <h2>Revenue Trend</h2>
+              </div>
+
+              <p>Monthly revenue performance</p>
+            </div>
+
+            <div className="chart-action">
+              <ArrowUpRight size={17} />
+            </div>
 
           </div>
 
-          <div className="analytics-chart">
+          <div className="chart-content">
 
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-              <LineChart data={trendData}>
+            <ResponsiveContainer width="100%" height={330}>
+              <AreaChart data={trend}>
+
+                <defs>
+                  <linearGradient
+                    id="revenueGradient"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="0%"
+                      stopColor="#3155ff"
+                      stopOpacity={0.35}
+                    />
+
+                    <stop
+                      offset="100%"
+                      stopColor="#3155ff"
+                      stopOpacity={0.02}
+                    />
+                  </linearGradient>
+                </defs>
 
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  opacity={0.15}
+                  vertical={false}
+                  stroke={dark ? '#273354' : '#e8ebf5'}
                 />
 
-                <XAxis dataKey="name" />
+                <XAxis
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12 }}
+                />
 
                 <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12 }}
                   tickFormatter={(value) =>
-                    `$${formatNumber(value)}`
+                    `$${formatNumber(value / 1000)}k`
                   }
                 />
 
@@ -833,178 +549,154 @@ const Analytics = () => {
                   content={<CustomTooltip />}
                 />
 
-                <Line
+                <Area
                   type="monotone"
                   dataKey="revenue"
+                  name="Revenue"
                   stroke="#3155ff"
-                  strokeWidth={4}
-                  dot={{
-                    r: 5,
-                  }}
+                  strokeWidth={3}
+                  fill="url(#revenueGradient)"
                   activeDot={{
-                    r: 7,
+                    r: 6,
+                    strokeWidth: 3,
                   }}
                 />
 
-              </LineChart>
+              </AreaChart>
             </ResponsiveContainer>
 
           </div>
-
         </div>
 
         {/* REGION */}
-        <div className="analytics-chart-card">
+        <div className="chart-card">
 
-          <div className="analytics-chart-header">
+          <div className="chart-header">
 
             <div>
-              <h2>Sales by Region</h2>
+              <div className="chart-title-row">
+                <div className="chart-small-icon purple">
+                  <BarChart3 size={18} />
+                </div>
 
-              <p>
-                Regional revenue comparison
-              </p>
-            </div>
-
-            <Activity size={22} />
-
-          </div>
-
-          <div className="analytics-chart">
-
-            {filteredRegionData.length === 0 ? (
-
-              <div className="analytics-empty">
-                <AlertCircle size={32} />
-
-                <span>
-                  No region data available
-                </span>
+                <h2>Sales by Region</h2>
               </div>
 
-            ) : (
+              <p>Revenue distribution by region</p>
+            </div>
 
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
-              >
-                <BarChart
-                  data={filteredRegionData}
-                  margin={{
-                    top: 10,
-                    right: 10,
-                    left: 0,
-                    bottom: 10,
-                  }}
-                >
-
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    opacity={0.15}
-                  />
-
-                  <XAxis
-                    dataKey="name"
-                    tick={{
-                      fontSize: 12,
-                    }}
-                  />
-
-                  <YAxis
-                    tickFormatter={(value) =>
-                      `$${formatNumber(value)}`
-                    }
-                  />
-
-                  <Tooltip
-                    formatter={(value) =>
-                      formatCurrency(value)
-                    }
-                  />
-
-                  <Bar
-                    dataKey="value"
-                    fill="#3155ff"
-                    radius={[
-                      8,
-                      8,
-                      0,
-                      0,
-                    ]}
-                    maxBarSize={70}
-                  />
-
-                </BarChart>
-              </ResponsiveContainer>
-
-            )}
+            <div className="mini-total">
+              {formatCurrency(
+                regions.reduce(
+                  (sum, item) => sum + item.value,
+                  0
+                )
+              )}
+            </div>
 
           </div>
 
+          <div className="chart-content">
+
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart
+                data={filteredRegions}
+                margin={{
+                  top: 10,
+                  right: 5,
+                  left: -15,
+                  bottom: 0,
+                }}
+              >
+
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke={dark ? '#273354' : '#e8ebf5'}
+                />
+
+                <XAxis
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12 }}
+                />
+
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(value) =>
+                    `$${formatNumber(value / 1000)}k`
+                  }
+                />
+
+                <Tooltip
+                  content={<CustomTooltip />}
+                />
+
+                <Bar
+                  dataKey="value"
+                  name="Sales"
+                  fill="#3155ff"
+                  radius={[8, 8, 0, 0]}
+                  maxBarSize={58}
+                />
+
+              </BarChart>
+            </ResponsiveContainer>
+
+          </div>
         </div>
 
         {/* CATEGORY */}
-        <div className="analytics-chart-card">
+        <div className="chart-card">
 
-          <div className="analytics-chart-header">
+          <div className="chart-header">
 
             <div>
-              <h2>Sales by Category</h2>
+              <div className="chart-title-row">
+                <div className="chart-small-icon cyan">
+                  <Database size={18} />
+                </div>
 
-              <p>
-                Category revenue comparison
-              </p>
+                <h2>Sales by Category</h2>
+              </div>
+
+              <p>Revenue contribution by category</p>
             </div>
 
-            <DollarSign size={22} />
+            <div className="mini-total">
+              {formatCurrency(categoryTotal)}
+            </div>
 
           </div>
 
-          <div className="analytics-chart">
+          <div className="category-content">
 
-            {filteredCategoryData.length === 0 ? (
+            <div className="pie-wrapper">
 
-              <div className="analytics-empty">
-                <AlertCircle size={32} />
+              <ResponsiveContainer width="100%" height={245}>
+                <PieChart>
 
-                <span>
-                  No category data available
-                </span>
-              </div>
-
-            ) : (
-
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
-              >
-                <BarChart
-                  data={filteredCategoryData}
-                  margin={{
-                    top: 10,
-                    right: 10,
-                    left: 0,
-                    bottom: 10,
-                  }}
-                >
-
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    opacity={0.15}
-                  />
-
-                  <XAxis
-                    dataKey="name"
-                    tick={{
-                      fontSize: 12,
-                    }}
-                  />
-
-                  <YAxis
-                    tickFormatter={(value) =>
-                      `$${formatNumber(value)}`
-                    }
-                  />
+                  <Pie
+                    data={filteredCategories}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={65}
+                    outerRadius={95}
+                    paddingAngle={4}
+                    stroke="none"
+                  >
+                    {filteredCategories.map((_, index) => (
+                      <Cell
+                        key={`category-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
 
                   <Tooltip
                     formatter={(value) =>
@@ -1012,35 +704,91 @@ const Analytics = () => {
                     }
                   />
 
-                  <Bar
-                    dataKey="value"
-                    fill="#6c63ff"
-                    radius={[
-                      8,
-                      8,
-                      0,
-                      0,
-                    ]}
-                    maxBarSize={70}
-                  />
-
-                </BarChart>
+                </PieChart>
               </ResponsiveContainer>
 
-            )}
+              <div className="pie-center">
+                <strong>
+                  {formatCurrency(categoryTotal)}
+                </strong>
 
+                <span>Total</span>
+              </div>
+
+            </div>
+
+            <div className="category-legend">
+
+              {filteredCategories.map((item, index) => {
+
+                const percentage =
+                  categoryTotal > 0
+                    ? (item.value / categoryTotal) * 100
+                    : 0
+
+                return (
+                  <div
+                    className="legend-item"
+                    key={item.name}
+                  >
+
+                    <div className="legend-main">
+
+                      <span
+                        className="legend-dot"
+                        style={{
+                          background:
+                            COLORS[index % COLORS.length],
+                        }}
+                      />
+
+                      <span className="legend-name">
+                        {item.name}
+                      </span>
+
+                    </div>
+
+                    <div className="legend-values">
+                      <strong>
+                        {formatCurrency(item.value)}
+                      </strong>
+
+                      <span>
+                        {percentage.toFixed(1)}%
+                      </span>
+                    </div>
+
+                  </div>
+                )
+              })}
+
+            </div>
           </div>
+        </div>
 
+      </section>
+
+      {/* FOOTER INSIGHT */}
+      <div className="analytics-footer">
+
+        <div className="footer-icon">
+          <Activity size={19} />
+        </div>
+
+        <div>
+          <strong>MetricMind Analytics Engine</strong>
+
+          <span>
+            Your charts are connected to the live MetricMind dataset.
+          </span>
+        </div>
+
+        <div className="footer-live">
+          <span className="status-dot"></span>
+          {apiOnline ? 'Connected' : 'Disconnected'}
         </div>
 
       </div>
-
-      {/* LOADING */}
-      {loading && (
-        <div className="analytics-loading">
-          Loading analytics...
-        </div>
-      )}
 
     </div>
   )
