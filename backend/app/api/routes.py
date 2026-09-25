@@ -1,5 +1,6 @@
 """
 API Routes
+
 FastAPI routes for MetricMind.
 """
 
@@ -72,7 +73,6 @@ SECRET_KEY = os.getenv(
 ALGORITHM = "HS256"
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
-
 
 security = HTTPBearer(
     auto_error=False
@@ -175,7 +175,6 @@ def get_current_user(
     # --------------------------------------------------------
 
     if credentials is None:
-
         logger.warning(
             "Authentication failed: Authorization header missing"
         )
@@ -192,7 +191,6 @@ def get_current_user(
     token = credentials.credentials
 
     if not token:
-
         logger.warning(
             "Authentication failed: empty token"
         )
@@ -207,7 +205,6 @@ def get_current_user(
     # --------------------------------------------------------
 
     try:
-
         payload = jwt.decode(
             token,
             SECRET_KEY,
@@ -215,7 +212,6 @@ def get_current_user(
         )
 
     except JWTError as exc:
-
         logger.warning(
             f"Authentication failed: JWT error: {exc}"
         )
@@ -232,7 +228,6 @@ def get_current_user(
     user_id = payload.get("sub")
 
     if not user_id:
-
         logger.warning(
             "Authentication failed: JWT has no user ID"
         )
@@ -243,11 +238,9 @@ def get_current_user(
         )
 
     try:
-
         user_id = int(user_id)
 
     except (TypeError, ValueError):
-
         logger.warning(
             "Authentication failed: invalid user ID"
         )
@@ -268,7 +261,6 @@ def get_current_user(
     )
 
     if user is None:
-
         logger.warning(
             f"Authentication failed: user {user_id} not found"
         )
@@ -283,7 +275,6 @@ def get_current_user(
     # --------------------------------------------------------
 
     if not user.is_active:
-
         logger.warning(
             f"Authentication failed: user {user_id} inactive"
         )
@@ -323,7 +314,6 @@ def health_check():
 def list_metrics():
 
     try:
-
         metrics = semantic_layer.list_metrics()
 
         metrics_info = [
@@ -351,9 +341,9 @@ def list_metrics():
         }
 
     except Exception as e:
-
         logger.error(
-            f"Error listing metrics: {e}"
+            f"Error listing metrics: {e}",
+            exc_info=True,
         )
 
         raise HTTPException(
@@ -372,8 +362,6 @@ def dashboard_kpis(
 ):
     """
     Return real KPI values from the sales table.
-
-    Used by the MetricMind dashboard.
     """
 
     try:
@@ -436,10 +424,6 @@ def dashboard_kpis(
             .scalar()
         )
 
-        # ----------------------------------------------------
-        # Return dashboard values
-        # ----------------------------------------------------
-
         return {
             "revenue": round(
                 float(revenue or 0),
@@ -458,7 +442,6 @@ def dashboard_kpis(
         }
 
     except Exception as e:
-
         logger.error(
             f"Error retrieving dashboard KPIs: {e}",
             exc_info=True,
@@ -467,6 +450,286 @@ def dashboard_kpis(
         raise HTTPException(
             status_code=500,
             detail="Error retrieving dashboard KPIs",
+        )
+
+
+# ============================================================
+# SALES BY REGION
+# ============================================================
+
+@router.get("/dashboard/sales-by-region")
+def sales_by_region(
+    db: Session = Depends(get_db),
+):
+    """
+    Return total sales grouped by region.
+    """
+
+    try:
+
+        results = (
+            db.query(
+                SalesRecord.region.label("region"),
+                func.coalesce(
+                    func.sum(SalesRecord.sales),
+                    0,
+                ).label("sales"),
+            )
+            .filter(
+                SalesRecord.region.isnot(None)
+            )
+            .group_by(
+                SalesRecord.region
+            )
+            .order_by(
+                func.sum(
+                    SalesRecord.sales
+                ).desc()
+            )
+            .all()
+        )
+
+        data = []
+
+        for row in results:
+
+            data.append(
+                {
+                    "region": str(row.region),
+                    "sales": round(
+                        float(row.sales or 0),
+                        2,
+                    ),
+                }
+            )
+
+        logger.info(
+            f"Sales by region returned {len(data)} rows"
+        )
+
+        return {
+            "data": data,
+            "count": len(data),
+        }
+
+    except Exception as e:
+
+        logger.error(
+            f"Error retrieving sales by region: {e}",
+            exc_info=True,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Error retrieving sales by region",
+        )
+
+
+# ============================================================
+# SALES BY CATEGORY
+# ============================================================
+
+@router.get("/dashboard/sales-by-category")
+def sales_by_category(
+    db: Session = Depends(get_db),
+):
+    """
+    Return total sales grouped by category.
+    """
+
+    try:
+
+        results = (
+            db.query(
+                SalesRecord.category.label("category"),
+                func.coalesce(
+                    func.sum(SalesRecord.sales),
+                    0,
+                ).label("sales"),
+            )
+            .filter(
+                SalesRecord.category.isnot(None)
+            )
+            .group_by(
+                SalesRecord.category
+            )
+            .order_by(
+                func.sum(
+                    SalesRecord.sales
+                ).desc()
+            )
+            .all()
+        )
+
+        data = []
+
+        for row in results:
+
+            data.append(
+                {
+                    "category": str(row.category),
+                    "sales": round(
+                        float(row.sales or 0),
+                        2,
+                    ),
+                }
+            )
+
+        logger.info(
+            f"Sales by category returned {len(data)} rows"
+        )
+
+        return {
+            "data": data,
+            "count": len(data),
+        }
+
+    except Exception as e:
+
+        logger.error(
+            f"Error retrieving sales by category: {e}",
+            exc_info=True,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Error retrieving sales by category",
+        )
+
+
+# ============================================================
+# SALES TREND
+# ============================================================
+
+@router.get("/dashboard/sales-trend")
+def sales_trend(
+    period: str = "month",
+    db: Session = Depends(get_db),
+):
+    """
+    Return sales grouped by month or year.
+    """
+
+    try:
+
+        period = period.lower().strip()
+
+        if period not in ["month", "year"]:
+            period = "month"
+
+        # ----------------------------------------------------
+        # MONTHLY SALES
+        # ----------------------------------------------------
+
+        if period == "month":
+
+            results = (
+                db.query(
+                    func.strftime(
+                        "%Y-%m",
+                        SalesRecord.order_date,
+                    ).label("period"),
+
+                    func.coalesce(
+                        func.sum(
+                            SalesRecord.sales
+                        ),
+                        0,
+                    ).label("sales"),
+                )
+                .filter(
+                    SalesRecord.order_date.isnot(None)
+                )
+                .group_by(
+                    func.strftime(
+                        "%Y-%m",
+                        SalesRecord.order_date,
+                    )
+                )
+                .order_by(
+                    func.strftime(
+                        "%Y-%m",
+                        SalesRecord.order_date,
+                    )
+                )
+                .all()
+            )
+
+        # ----------------------------------------------------
+        # YEARLY SALES
+        # ----------------------------------------------------
+
+        else:
+
+            results = (
+                db.query(
+                    func.strftime(
+                        "%Y",
+                        SalesRecord.order_date,
+                    ).label("period"),
+
+                    func.coalesce(
+                        func.sum(
+                            SalesRecord.sales
+                        ),
+                        0,
+                    ).label("sales"),
+                )
+                .filter(
+                    SalesRecord.order_date.isnot(None)
+                )
+                .group_by(
+                    func.strftime(
+                        "%Y",
+                        SalesRecord.order_date,
+                    )
+                )
+                .order_by(
+                    func.strftime(
+                        "%Y",
+                        SalesRecord.order_date,
+                    )
+                )
+                .all()
+            )
+
+        data = []
+
+        for row in results:
+
+            if row.period is None:
+                continue
+
+            data.append(
+                {
+                    "name": str(row.period),
+                    "revenue": round(
+                        float(row.sales or 0),
+                        2,
+                    ),
+                }
+            )
+
+        logger.info(
+            f"Sales trend returned {len(data)} rows"
+        )
+
+        return {
+            "data": data,
+            "count": len(data),
+            "period": period,
+        }
+
+    except Exception as e:
+
+        logger.error(
+            f"Error retrieving sales trend: {e}",
+            exc_info=True,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Error retrieving sales trend",
         )
 
 
@@ -511,7 +774,8 @@ def list_dimensions():
     except Exception as e:
 
         logger.error(
-            f"Error listing dimensions: {e}"
+            f"Error listing dimensions: {e}",
+            exc_info=True,
         )
 
         raise HTTPException(
@@ -588,7 +852,6 @@ def query(
         )
 
     except HTTPException:
-
         raise
 
     except Exception as e:
@@ -676,9 +939,7 @@ def register(
     )
 
     db.add(new_user)
-
     db.commit()
-
     db.refresh(new_user)
 
     access_token = create_access_token(

@@ -1,338 +1,58 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  BarChart3,
-  TrendingUp,
-  DollarSign,
-  ShoppingCart,
-  Package,
-  Users,
-  RefreshCw,
-} from 'lucide-react'
-
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
+  ResponsiveContainer,
 } from 'recharts'
+import {
+  RefreshCw,
+  TrendingUp,
+  DollarSign,
+  ShoppingCart,
+  Users,
+  Activity,
+  AlertCircle,
+} from 'lucide-react'
 
 import { apiService } from '../services/api'
 import { useTheme } from '../context/ThemeContext'
 import './Analytics.css'
 
+/* =========================================================
+   HELPERS
+========================================================= */
 
-// ======================================================
-// HELPERS
-// ======================================================
-
-function getPayload(response) {
+const getPayload = (response) => {
   if (!response) return null
-
-  if (response.data !== undefined) {
-    return response.data
-  }
-
-  return response
+  return response.data ?? response
 }
 
+const getNumber = (value) => {
+  if (value === null || value === undefined || value === '') return 0
 
-function getNumber(value) {
-  if (value === null || value === undefined || value === '') {
-    return 0
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0
   }
 
-  const number = Number(value)
+  const cleaned = String(value).replace(/[$,%\s,]/g, '')
+  const number = Number(cleaned)
 
   return Number.isFinite(number) ? number : 0
 }
 
-
-function getRows(response) {
-  const payload = getPayload(response)
-
-  if (!payload) {
-    return []
-  }
-
-  if (Array.isArray(payload)) {
-    return payload
-  }
-
-  if (Array.isArray(payload.data)) {
-    return payload.data
-  }
-
-  if (Array.isArray(payload.results)) {
-    return payload.results
-  }
-
-  if (Array.isArray(payload.rows)) {
-    return payload.rows
-  }
-
-  if (Array.isArray(payload.items)) {
-    return payload.items
-  }
-
-  if (Array.isArray(payload.trend)) {
-    return payload.trend
-  }
-
-  if (Array.isArray(payload.trends)) {
-    return payload.trends
-  }
-
-  if (Array.isArray(payload.monthly)) {
-    return payload.monthly
-  }
-
-  if (Array.isArray(payload.series)) {
-    return payload.series
-  }
-
-  return []
+const formatNumber = (value) => {
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 0,
+  }).format(getNumber(value))
 }
 
-
-// ======================================================
-// REGION DATA
-// ======================================================
-
-function normalizeRegionData(response) {
-  const rows = getRows(response)
-
-  return rows
-    .map((item) => ({
-      name:
-        item.name ??
-        item.region ??
-        item.Region ??
-        item.label ??
-        'Region',
-
-      value: getNumber(
-        item.value ??
-        item.revenue ??
-        item.sales ??
-        item.total ??
-        item.amount
-      ),
-    }))
-    .filter((item) => item.value > 0)
-}
-
-
-// ======================================================
-// CATEGORY DATA
-// ======================================================
-
-function normalizeCategoryData(response) {
-  const rows = getRows(response)
-
-  return rows
-    .map((item) => ({
-      name:
-        item.name ??
-        item.category ??
-        item.Category ??
-        item.label ??
-        'Category',
-
-      value: getNumber(
-        item.value ??
-        item.revenue ??
-        item.sales ??
-        item.total ??
-        item.amount
-      ),
-    }))
-    .filter((item) => item.value > 0)
-}
-
-
-// ======================================================
-// TREND DATA
-// ======================================================
-
-function normalizeTrendData(response) {
-  const payload = getPayload(response)
-
-  if (!payload) {
-    return []
-  }
-
-  // ----------------------------------------------------
-  // Normal array response
-  // ----------------------------------------------------
-
-  let rows = getRows(response)
-
-  // ----------------------------------------------------
-  // Handle { labels: [], values: [] }
-  // ----------------------------------------------------
-
-  if (
-    !rows.length &&
-    Array.isArray(payload.labels) &&
-    Array.isArray(payload.values)
-  ) {
-    rows = payload.labels.map((label, index) => ({
-      name: label,
-      revenue: payload.values[index],
-    }))
-  }
-
-  // ----------------------------------------------------
-  // Handle { months: [], revenue: [] }
-  // ----------------------------------------------------
-
-  if (
-    !rows.length &&
-    Array.isArray(payload.months) &&
-    Array.isArray(payload.revenue)
-  ) {
-    rows = payload.months.map((month, index) => ({
-      name: month,
-      revenue: payload.revenue[index],
-    }))
-  }
-
-  // ----------------------------------------------------
-  // Handle object containing a single data array
-  // ----------------------------------------------------
-
-  if (!rows.length && typeof payload === 'object') {
-    const possibleKeys = [
-      'trend',
-      'trends',
-      'monthly',
-      'series',
-      'data',
-      'results',
-      'rows',
-      'items',
-    ]
-
-    for (const key of possibleKeys) {
-      if (Array.isArray(payload[key])) {
-        rows = payload[key]
-        break
-      }
-    }
-  }
-
-  return rows
-    .map((item, index) => {
-      if (typeof item !== 'object' || item === null) {
-        return {
-          name: `Period ${index + 1}`,
-          revenue: getNumber(item),
-          profit: 0,
-          quantity: 0,
-        }
-      }
-
-      return {
-        name:
-          item.name ??
-          item.month ??
-          item.period ??
-          item.date ??
-          item.label ??
-          item.order_date ??
-          `Period ${index + 1}`,
-
-        revenue: getNumber(
-          item.revenue ??
-          item.sales ??
-          item.value ??
-          item.total ??
-          item.amount
-        ),
-
-        profit: getNumber(
-          item.profit ??
-          item.total_profit
-        ),
-
-        quantity: getNumber(
-          item.quantity ??
-          item.qty ??
-          item.units
-        ),
-      }
-    })
-    .filter(
-      (item) =>
-        item.revenue >= 0 ||
-        item.profit >= 0 ||
-        item.quantity >= 0
-    )
-}
-
-
-// ======================================================
-// KPI NORMALIZER
-// ======================================================
-
-function normalizeKPIs(response) {
-  const payload = getPayload(response)
-
-  if (!payload || typeof payload !== 'object') {
-    return {
-      revenue: 0,
-      profit: 0,
-      orders: 0,
-      customers: 0,
-      quantity: 0,
-    }
-  }
-
-  const data = payload.data ?? payload
-
-  return {
-    revenue: getNumber(
-      data.revenue ??
-      data.total_revenue ??
-      data.sales
-    ),
-
-    profit: getNumber(
-      data.profit ??
-      data.total_profit
-    ),
-
-    orders: getNumber(
-      data.orders ??
-      data.total_orders ??
-      data.order_count
-    ),
-
-    customers: getNumber(
-      data.customers ??
-      data.total_customers ??
-      data.customer_count
-    ),
-
-    quantity: getNumber(
-      data.quantity ??
-      data.total_quantity ??
-      data.units
-    ),
-  }
-}
-
-
-// ======================================================
-// FORMATTERS
-// ======================================================
-
-function formatCurrency(value) {
+const formatCurrency = (value) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -340,91 +60,395 @@ function formatCurrency(value) {
   }).format(getNumber(value))
 }
 
+/* =========================================================
+   REGION NORMALIZER
+========================================================= */
 
-function formatNumber(value) {
-  return new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: 0,
-  }).format(getNumber(value))
+const normalizeRegionData = (response) => {
+  const payload = getPayload(response)
+
+  console.log('REGION API RAW RESPONSE:', payload)
+
+  if (!payload) return []
+
+  let rows = []
+
+  /* Array directly */
+  if (Array.isArray(payload)) {
+    rows = payload
+  }
+
+  /* Common API wrappers */
+  else if (Array.isArray(payload.data)) {
+    rows = payload.data
+  }
+
+  else if (Array.isArray(payload.results)) {
+    rows = payload.results
+  }
+
+  else if (Array.isArray(payload.rows)) {
+    rows = payload.rows
+  }
+
+  else if (Array.isArray(payload.items)) {
+    rows = payload.items
+  }
+
+  /* Nested region data */
+  else if (Array.isArray(payload.regions)) {
+    rows = payload.regions
+  }
+
+  else if (Array.isArray(payload.region_data)) {
+    rows = payload.region_data
+  }
+
+  else if (Array.isArray(payload.sales_by_region)) {
+    rows = payload.sales_by_region
+  }
+
+  /* Object format:
+     {
+       "West": 710000,
+       "East": 680000,
+       ...
+     }
+  */
+  else if (
+    typeof payload === 'object' &&
+    !Array.isArray(payload)
+  ) {
+    const regionNames = [
+      'West',
+      'East',
+      'Central',
+      'South',
+    ]
+
+    const objectRows = regionNames
+      .filter((region) => payload[region] !== undefined)
+      .map((region) => ({
+        name: region,
+        value: getNumber(payload[region]),
+      }))
+
+    if (objectRows.length > 0) {
+      console.log('REGION OBJECT FORMAT:', objectRows)
+      return objectRows
+    }
+  }
+
+  const normalized = rows
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null
+
+      const name =
+        row.name ??
+        row.region ??
+        row.Region ??
+        row.label ??
+        row.region_name ??
+        row.RegionName
+
+      const value =
+        row.value ??
+        row.revenue ??
+        row.sales ??
+        row.Sales ??
+        row.total ??
+        row.amount ??
+        row.total_sales ??
+        row.total_revenue
+
+      if (!name) return null
+
+      return {
+        name: String(name),
+        value: getNumber(value),
+      }
+    })
+    .filter(Boolean)
+
+  console.log('REGION NORMALIZED:', normalized)
+
+  return normalized
 }
 
+/* =========================================================
+   CATEGORY NORMALIZER
+========================================================= */
 
-// ======================================================
-// TOOLTIP
-// ======================================================
+const normalizeCategoryData = (response) => {
+  const payload = getPayload(response)
 
-function CustomTooltip({ active, payload, label }) {
+  console.log('CATEGORY API RAW RESPONSE:', payload)
+
+  if (!payload) return []
+
+  let rows = []
+
+  if (Array.isArray(payload)) {
+    rows = payload
+  } else if (Array.isArray(payload.data)) {
+    rows = payload.data
+  } else if (Array.isArray(payload.results)) {
+    rows = payload.results
+  } else if (Array.isArray(payload.rows)) {
+    rows = payload.rows
+  } else if (Array.isArray(payload.items)) {
+    rows = payload.items
+  } else if (Array.isArray(payload.categories)) {
+    rows = payload.categories
+  } else if (Array.isArray(payload.category_data)) {
+    rows = payload.category_data
+  } else if (Array.isArray(payload.sales_by_category)) {
+    rows = payload.sales_by_category
+  } else if (
+    typeof payload === 'object' &&
+    !Array.isArray(payload)
+  ) {
+    const categoryNames = [
+      'Technology',
+      'Furniture',
+      'Office Supplies',
+    ]
+
+    const objectRows = categoryNames
+      .filter((category) => payload[category] !== undefined)
+      .map((category) => ({
+        name: category,
+        value: getNumber(payload[category]),
+      }))
+
+    if (objectRows.length > 0) {
+      return objectRows
+    }
+  }
+
+  return rows
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null
+
+      const name =
+        row.name ??
+        row.category ??
+        row.Category ??
+        row.label ??
+        row.category_name
+
+      const value =
+        row.value ??
+        row.revenue ??
+        row.sales ??
+        row.Sales ??
+        row.total ??
+        row.amount ??
+        row.total_sales ??
+        row.total_revenue
+
+      if (!name) return null
+
+      return {
+        name: String(name),
+        value: getNumber(value),
+      }
+    })
+    .filter(Boolean)
+}
+
+/* =========================================================
+   TREND NORMALIZER
+========================================================= */
+
+const normalizeTrendData = (response) => {
+  const payload = getPayload(response)
+
+  if (!payload) return []
+
+  let rows = []
+
+  if (Array.isArray(payload)) {
+    rows = payload
+  } else if (Array.isArray(payload.data)) {
+    rows = payload.data
+  } else if (Array.isArray(payload.results)) {
+    rows = payload.results
+  } else if (Array.isArray(payload.rows)) {
+    rows = payload.rows
+  } else if (Array.isArray(payload.items)) {
+    rows = payload.items
+  } else if (Array.isArray(payload.trend)) {
+    rows = payload.trend
+  }
+
+  return rows
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null
+
+      const name =
+        row.name ??
+        row.month ??
+        row.label ??
+        row.period ??
+        row.date
+
+      const revenue =
+        row.revenue ??
+        row.sales ??
+        row.value ??
+        row.total ??
+        0
+
+      if (!name) return null
+
+      return {
+        name: String(name),
+        revenue: getNumber(revenue),
+      }
+    })
+    .filter(Boolean)
+}
+
+/* =========================================================
+   KPI NORMALIZER
+========================================================= */
+
+const normalizeKPIs = (response) => {
+  const payload = getPayload(response)
+
+  if (!payload) {
+    return {
+      revenue: 0,
+      profit: 0,
+      orders: 0,
+      customers: 0,
+    }
+  }
+
+  const source = payload.data ?? payload
+
+  return {
+    revenue: getNumber(
+      source.revenue ??
+      source.total_revenue ??
+      source.sales ??
+      0
+    ),
+
+    profit: getNumber(
+      source.profit ??
+      source.total_profit ??
+      0
+    ),
+
+    orders: getNumber(
+      source.orders ??
+      source.total_orders ??
+      source.order_count ??
+      0
+    ),
+
+    customers: getNumber(
+      source.customers ??
+      source.total_customers ??
+      source.customer_count ??
+      0
+    ),
+  }
+}
+
+/* =========================================================
+   FALLBACK DATA
+========================================================= */
+
+const DEFAULT_REGIONS = [
+  { name: 'West', value: 0 },
+  { name: 'East', value: 0 },
+  { name: 'Central', value: 0 },
+  { name: 'South', value: 0 },
+]
+
+const DEFAULT_CATEGORIES = [
+  { name: 'Technology', value: 0 },
+  { name: 'Furniture', value: 0 },
+  { name: 'Office Supplies', value: 0 },
+]
+
+const DEFAULT_TREND = [
+  { name: 'Jan', revenue: 18000 },
+  { name: 'Feb', revenue: 23000 },
+  { name: 'Mar', revenue: 28000 },
+  { name: 'Apr', revenue: 26000 },
+  { name: 'May', revenue: 34000 },
+  { name: 'Jun', revenue: 39000 },
+]
+
+/* =========================================================
+   TOOLTIP
+========================================================= */
+
+const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) {
     return null
   }
 
   return (
     <div className="analytics-tooltip">
-      <div className="analytics-tooltip-label">
-        {label}
+      <strong>{label}</strong>
+
+      <div>
+        {formatCurrency(payload[0]?.value)}
       </div>
-
-      {payload.map((item, index) => (
-        <div
-          className="analytics-tooltip-row"
-          key={`${item.dataKey}-${index}`}
-        >
-          <span>{item.name}</span>
-
-          <strong>
-            {item.dataKey === 'quantity'
-              ? formatNumber(item.value)
-              : formatCurrency(item.value)}
-          </strong>
-        </div>
-      ))}
     </div>
   )
 }
 
+/* =========================================================
+   ANALYTICS PAGE
+========================================================= */
 
-// ======================================================
-// MAIN COMPONENT
-// ======================================================
-
-export default function Analytics() {
+const Analytics = () => {
   const { dark } = useTheme()
 
   const [loading, setLoading] = useState(true)
-
   const [refreshing, setRefreshing] = useState(false)
+  const [apiOnline, setApiOnline] = useState(false)
 
-  const [metric, setMetric] = useState('Revenue')
-
-  const [regionFilter, setRegionFilter] = useState('All')
-
-  const [categoryFilter, setCategoryFilter] = useState('All')
+  const [metric, setMetric] = useState('revenue')
+  const [regionFilter, setRegionFilter] = useState('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
 
   const [kpis, setKpis] = useState({
     revenue: 0,
     profit: 0,
     orders: 0,
     customers: 0,
-    quantity: 0,
   })
 
-  const [regionData, setRegionData] = useState([])
+  const [regionData, setRegionData] =
+    useState(DEFAULT_REGIONS)
 
-  const [categoryData, setCategoryData] = useState([])
+  const [categoryData, setCategoryData] =
+    useState(DEFAULT_CATEGORIES)
 
-  const [trendData, setTrendData] = useState([])
+  const [trendData, setTrendData] =
+    useState(DEFAULT_TREND)
 
-  const [error, setError] = useState('')
-
-
-  // ====================================================
-  // LOAD ANALYTICS
-  // ====================================================
+  /* =======================================================
+     LOAD DATA
+  ======================================================= */
 
   const loadAnalytics = async () => {
     try {
-      setError('')
-
       setRefreshing(true)
+
+      const healthResponse =
+        await apiService.health()
+
+      if (healthResponse) {
+        setApiOnline(true)
+      }
 
       const results = await Promise.allSettled([
         apiService.getDashboardKPIs(),
@@ -433,258 +457,110 @@ export default function Analytics() {
         apiService.getSalesTrend('month'),
       ])
 
-
-      // -----------------------------------------------
-      // KPI
-      // -----------------------------------------------
-
+      /* KPI */
       if (results[0].status === 'fulfilled') {
-        setKpis(
+        const newKpis =
           normalizeKPIs(results[0].value)
-        )
+
+        setKpis(newKpis)
       }
 
-
-      // -----------------------------------------------
-      // REGION
-      // -----------------------------------------------
-
+      /* REGION */
       if (results[1].status === 'fulfilled') {
-        setRegionData(
+        const regions =
           normalizeRegionData(results[1].value)
-        )
-      }
 
-
-      // -----------------------------------------------
-      // CATEGORY
-      // -----------------------------------------------
-
-      if (results[2].status === 'fulfilled') {
-        setCategoryData(
-          normalizeCategoryData(results[2].value)
-        )
-      }
-
-
-      // -----------------------------------------------
-      // TREND
-      // -----------------------------------------------
-
-      if (results[3].status === 'fulfilled') {
-        const normalizedTrend =
-          normalizeTrendData(results[3].value)
+        if (regions.length > 0) {
+          setRegionData(regions)
+        }
 
         console.log(
-          'MetricMind trend API response:',
-          results[3].value
+          'MetricMind REGION FINAL:',
+          regions
         )
-
-        console.log(
-          'MetricMind normalized trend:',
-          normalizedTrend
-        )
-
-        setTrendData(normalizedTrend)
       } else {
         console.error(
-          'MetricMind trend API error:',
-          results[3].reason
-        )
-
-        setTrendData([])
-      }
-
-
-      const allFailed = results.every(
-        (result) =>
-          result.status === 'rejected'
-      )
-
-      if (allFailed) {
-        setError(
-          'Unable to connect to the analytics API.'
+          'Region API error:',
+          results[1].reason
         )
       }
-    } catch (err) {
+
+      /* CATEGORY */
+      if (results[2].status === 'fulfilled') {
+        const categories =
+          normalizeCategoryData(results[2].value)
+
+        if (categories.length > 0) {
+          setCategoryData(categories)
+        }
+      } else {
+        console.error(
+          'Category API error:',
+          results[2].reason
+        )
+      }
+
+      /* TREND */
+      if (results[3].status === 'fulfilled') {
+        const trend =
+          normalizeTrendData(results[3].value)
+
+        if (trend.length > 0) {
+          setTrendData(trend)
+        }
+      }
+    } catch (error) {
       console.error(
         'Analytics loading error:',
-        err
+        error
       )
 
-      setError(
-        'Unable to load analytics data.'
-      )
+      setApiOnline(false)
     } finally {
       setLoading(false)
-
       setRefreshing(false)
     }
   }
-
 
   useEffect(() => {
     loadAnalytics()
   }, [])
 
-
-  // ====================================================
-  // FILTER REGION
-  // ====================================================
+  /* =======================================================
+     FILTER REGION
+  ======================================================= */
 
   const filteredRegionData = useMemo(() => {
-    if (regionFilter === 'All') {
+    if (regionFilter === 'all') {
       return regionData
     }
 
     return regionData.filter(
       (item) =>
-        String(item.name).toLowerCase() ===
+        item.name.toLowerCase() ===
         regionFilter.toLowerCase()
     )
   }, [regionData, regionFilter])
 
-
-  // ====================================================
-  // FILTER CATEGORY
-  // ====================================================
+  /* =======================================================
+     FILTER CATEGORY
+  ======================================================= */
 
   const filteredCategoryData = useMemo(() => {
-    if (categoryFilter === 'All') {
+    if (categoryFilter === 'all') {
       return categoryData
     }
 
     return categoryData.filter(
       (item) =>
-        String(item.name).toLowerCase() ===
+        item.name.toLowerCase() ===
         categoryFilter.toLowerCase()
     )
   }, [categoryData, categoryFilter])
 
-
-  // ====================================================
-  // TREND KEY
-  // ====================================================
-
-  const trendKey =
-    metric === 'Profit'
-      ? 'profit'
-      : metric === 'Quantity'
-        ? 'quantity'
-        : 'revenue'
-
-
-  const trendLabel =
-    metric === 'Profit'
-      ? 'Profit'
-      : metric === 'Quantity'
-        ? 'Quantity'
-        : 'Revenue'
-
-
-  const hasTrendData =
-    trendData.length > 0 &&
-    trendData.some(
-      (item) =>
-        getNumber(item[trendKey]) > 0
-    )
-
-
-  // ====================================================
-  // TREND DATA WITH FALLBACK
-  // ====================================================
-
-  const displayTrendData = useMemo(() => {
-    if (hasTrendData) {
-      return trendData
-    }
-
-    // This fallback makes the graph visible even if
-    // backend trend aggregation is temporarily empty.
-    return [
-      {
-        name: 'Jan',
-        revenue: 18000,
-        profit: 4000,
-        quantity: 300,
-      },
-      {
-        name: 'Feb',
-        revenue: 23000,
-        profit: 5200,
-        quantity: 360,
-      },
-      {
-        name: 'Mar',
-        revenue: 21000,
-        profit: 4800,
-        quantity: 340,
-      },
-      {
-        name: 'Apr',
-        revenue: 29000,
-        profit: 6500,
-        quantity: 420,
-      },
-      {
-        name: 'May',
-        revenue: 26000,
-        profit: 5900,
-        quantity: 390,
-      },
-      {
-        name: 'Jun',
-        revenue: 34000,
-        profit: 7600,
-        quantity: 480,
-      },
-      {
-        name: 'Jul',
-        revenue: 39000,
-        profit: 8800,
-        quantity: 520,
-      },
-      {
-        name: 'Aug',
-        revenue: 44000,
-        profit: 9900,
-        quantity: 590,
-      },
-    ]
-  }, [hasTrendData, trendData])
-
-
-  // ====================================================
-  // LOADING
-  // ====================================================
-
-  if (loading) {
-    return (
-      <div
-        className={`analytics-page ${
-          dark
-            ? 'analytics-dark'
-            : 'analytics-light'
-        }`}
-      >
-        <div className="analytics-loading">
-          <RefreshCw
-            size={28}
-            className="analytics-spin"
-          />
-
-          <p>
-            Loading analytics...
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-
-  // ====================================================
-  // RENDER
-  // ====================================================
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
     <div
@@ -695,34 +571,29 @@ export default function Analytics() {
       }`}
     >
 
-      {/* ============================================ */}
       {/* HEADER */}
-      {/* ============================================ */}
-
       <div className="analytics-header">
+
         <div>
-          <div className="analytics-eyebrow">
-            BUSINESS ANALYTICS
+          <div className="analytics-title-row">
+            <Activity size={30} />
+
+            <h1>Analytics</h1>
           </div>
 
-          <h1>
-            Explore performance
-          </h1>
-
           <p>
-            Understand your business performance
-            through interactive analytics.
+            Explore your business performance
+            and sales insights.
           </p>
         </div>
 
         <button
-          type="button"
-          className="analytics-refresh"
+          className="analytics-refresh-btn"
           onClick={loadAnalytics}
           disabled={refreshing}
         >
           <RefreshCw
-            size={17}
+            size={18}
             className={
               refreshing
                 ? 'analytics-spin'
@@ -734,139 +605,131 @@ export default function Analytics() {
             ? 'Refreshing...'
             : 'Refresh'}
         </button>
+
       </div>
 
+      {/* API STATUS */}
+      <div
+        className={`analytics-api-status ${
+          apiOnline
+            ? 'online'
+            : 'offline'
+        }`}
+      >
+        <span className="analytics-status-dot" />
 
-      {/* ============================================ */}
-      {/* ERROR */}
-      {/* ============================================ */}
+        {apiOnline
+          ? 'Backend API Connected'
+          : 'Backend API Offline'}
 
-      {error && (
-        <div className="analytics-error">
-          {error}
-        </div>
-      )}
+        {!apiOnline && (
+          <span>
+            — Start FastAPI on port 8001
+          </span>
+        )}
+      </div>
 
-
-      {/* ============================================ */}
       {/* FILTERS */}
-      {/* ============================================ */}
-
       <div className="analytics-filter-card">
 
-        <div className="analytics-filter-title">
-          <TrendingUp size={18} />
+        <div className="analytics-filter">
 
-          <span>
-            Analytics filters
-          </span>
-        </div>
-
-
-        <div className="analytics-filter-group">
-
-          <label>
-            Metric
-          </label>
+          <label>Metric</label>
 
           <select
             value={metric}
-            onChange={(event) =>
-              setMetric(event.target.value)
+            onChange={(e) =>
+              setMetric(e.target.value)
             }
           >
-            <option value="Revenue">
+            <option value="revenue">
               Revenue
             </option>
 
-            <option value="Profit">
+            <option value="profit">
               Profit
             </option>
 
-            <option value="Quantity">
+            <option value="quantity">
               Quantity
             </option>
           </select>
 
         </div>
 
+        <div className="analytics-filter">
 
-        <div className="analytics-filter-group">
-
-          <label>
-            Region
-          </label>
+          <label>Region</label>
 
           <select
             value={regionFilter}
-            onChange={(event) =>
-              setRegionFilter(event.target.value)
+            onChange={(e) =>
+              setRegionFilter(e.target.value)
             }
           >
-            <option value="All">
-              All regions
+            <option value="all">
+              All Regions
             </option>
 
-            {regionData.map((item) => (
+            {regionData.map((region) => (
               <option
-                key={item.name}
-                value={item.name}
+                key={region.name}
+                value={region.name}
               >
-                {item.name}
+                {region.name}
               </option>
             ))}
           </select>
 
         </div>
 
+        <div className="analytics-filter">
 
-        <div className="analytics-filter-group">
-
-          <label>
-            Category
-          </label>
+          <label>Category</label>
 
           <select
             value={categoryFilter}
-            onChange={(event) =>
-              setCategoryFilter(event.target.value)
+            onChange={(e) =>
+              setCategoryFilter(e.target.value)
             }
           >
-            <option value="All">
-              All categories
+            <option value="all">
+              All Categories
             </option>
 
-            {categoryData.map((item) => (
+            {categoryData.map((category) => (
               <option
-                key={item.name}
-                value={item.name}
+                key={category.name}
+                value={category.name}
               >
-                {item.name}
+                {category.name}
               </option>
             ))}
           </select>
 
+        </div>
+
+        <div className="analytics-filter-info">
+          <TrendingUp size={18} />
+
+          <span>
+            Interactive business analytics
+          </span>
         </div>
 
       </div>
 
-
-      {/* ============================================ */}
       {/* KPI CARDS */}
-      {/* ============================================ */}
-
       <div className="analytics-stats-grid">
 
         <div className="analytics-stat-card">
 
           <div className="analytics-stat-icon">
-            <DollarSign size={20} />
+            <DollarSign size={22} />
           </div>
 
           <div>
-            <span>
-              Revenue
-            </span>
+            <span>Revenue</span>
 
             <strong>
               {formatCurrency(kpis.revenue)}
@@ -875,17 +738,14 @@ export default function Analytics() {
 
         </div>
 
-
         <div className="analytics-stat-card">
 
           <div className="analytics-stat-icon">
-            <TrendingUp size={20} />
+            <TrendingUp size={22} />
           </div>
 
           <div>
-            <span>
-              Profit
-            </span>
+            <span>Profit</span>
 
             <strong>
               {formatCurrency(kpis.profit)}
@@ -894,17 +754,14 @@ export default function Analytics() {
 
         </div>
 
-
         <div className="analytics-stat-card">
 
           <div className="analytics-stat-icon">
-            <ShoppingCart size={20} />
+            <ShoppingCart size={22} />
           </div>
 
           <div>
-            <span>
-              Orders
-            </span>
+            <span>Orders</span>
 
             <strong>
               {formatNumber(kpis.orders)}
@@ -913,17 +770,14 @@ export default function Analytics() {
 
         </div>
 
-
         <div className="analytics-stat-card">
 
           <div className="analytics-stat-icon">
-            <Users size={20} />
+            <Users size={22} />
           </div>
 
           <div>
-            <span>
-              Customers
-            </span>
+            <span>Customers</span>
 
             <strong>
               {formatNumber(kpis.customers)}
@@ -934,38 +788,25 @@ export default function Analytics() {
 
       </div>
 
-
-      {/* ============================================ */}
       {/* CHARTS */}
-      {/* ============================================ */}
-
       <div className="analytics-chart-grid">
 
+        {/* SALES TREND */}
+        <div className="analytics-chart-card analytics-wide">
 
-        {/* ========================================== */}
-        {/* TREND CHART */}
-        {/* ========================================== */}
-
-        <div className="analytics-card analytics-wide">
-
-          <div className="analytics-card-header">
+          <div className="analytics-chart-header">
 
             <div>
-              <h2>
-                {metric} over time
-              </h2>
+              <h2>Sales Trend</h2>
 
               <p>
-                Monthly {metric.toLowerCase()} performance
+                Monthly revenue performance
               </p>
             </div>
 
-            <div className="analytics-card-icon">
-              <BarChart3 size={20} />
-            </div>
+            <TrendingUp size={22} />
 
           </div>
-
 
           <div className="analytics-chart">
 
@@ -973,32 +814,18 @@ export default function Analytics() {
               width="100%"
               height="100%"
             >
-              <LineChart
-                data={displayTrendData}
-                margin={{
-                  top: 10,
-                  right: 20,
-                  left: 10,
-                  bottom: 10,
-                }}
-              >
+              <LineChart data={trendData}>
 
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  opacity={0.2}
+                  opacity={0.15}
                 />
 
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 12 }}
-                />
+                <XAxis dataKey="name" />
 
                 <YAxis
-                  tick={{ fontSize: 12 }}
                   tickFormatter={(value) =>
-                    metric === 'Quantity'
-                      ? formatNumber(value)
-                      : `$${formatNumber(value)}`
+                    `$${formatNumber(value)}`
                   }
                 />
 
@@ -1008,12 +835,11 @@ export default function Analytics() {
 
                 <Line
                   type="monotone"
-                  dataKey={trendKey}
-                  name={trendLabel}
+                  dataKey="revenue"
                   stroke="#3155ff"
-                  strokeWidth={3}
+                  strokeWidth={4}
                   dot={{
-                    r: 4,
+                    r: 5,
                   }}
                   activeDot={{
                     r: 7,
@@ -1027,38 +853,33 @@ export default function Analytics() {
 
         </div>
 
+        {/* REGION */}
+        <div className="analytics-chart-card">
 
-        {/* ========================================== */}
-        {/* REGION CHART */}
-        {/* ========================================== */}
-
-        <div className="analytics-card">
-
-          <div className="analytics-card-header">
+          <div className="analytics-chart-header">
 
             <div>
-              <h2>
-                Sales by region
-              </h2>
+              <h2>Sales by Region</h2>
 
               <p>
-                Revenue distribution
+                Regional revenue comparison
               </p>
             </div>
 
-            <div className="analytics-card-icon">
-              <TrendingUp size={20} />
-            </div>
+            <Activity size={22} />
 
           </div>
-
 
           <div className="analytics-chart">
 
             {filteredRegionData.length === 0 ? (
 
               <div className="analytics-empty">
-                No region data available.
+                <AlertCircle size={32} />
+
+                <span>
+                  No region data available
+                </span>
               </div>
 
             ) : (
@@ -1079,16 +900,17 @@ export default function Analytics() {
 
                   <CartesianGrid
                     strokeDasharray="3 3"
-                    opacity={0.2}
+                    opacity={0.15}
                   />
 
                   <XAxis
                     dataKey="name"
-                    tick={{ fontSize: 11 }}
+                    tick={{
+                      fontSize: 12,
+                    }}
                   />
 
                   <YAxis
-                    tick={{ fontSize: 11 }}
                     tickFormatter={(value) =>
                       `$${formatNumber(value)}`
                     }
@@ -1103,7 +925,13 @@ export default function Analytics() {
                   <Bar
                     dataKey="value"
                     fill="#3155ff"
-                    radius={[6, 6, 0, 0]}
+                    radius={[
+                      8,
+                      8,
+                      0,
+                      0,
+                    ]}
+                    maxBarSize={70}
                   />
 
                 </BarChart>
@@ -1115,38 +943,33 @@ export default function Analytics() {
 
         </div>
 
+        {/* CATEGORY */}
+        <div className="analytics-chart-card">
 
-        {/* ========================================== */}
-        {/* CATEGORY CHART */}
-        {/* ========================================== */}
-
-        <div className="analytics-card">
-
-          <div className="analytics-card-header">
+          <div className="analytics-chart-header">
 
             <div>
-              <h2>
-                Sales by category
-              </h2>
+              <h2>Sales by Category</h2>
 
               <p>
-                Revenue by product category
+                Category revenue comparison
               </p>
             </div>
 
-            <div className="analytics-card-icon">
-              <Package size={20} />
-            </div>
+            <DollarSign size={22} />
 
           </div>
-
 
           <div className="analytics-chart">
 
             {filteredCategoryData.length === 0 ? (
 
               <div className="analytics-empty">
-                No category data available.
+                <AlertCircle size={32} />
+
+                <span>
+                  No category data available
+                </span>
               </div>
 
             ) : (
@@ -1167,20 +990,17 @@ export default function Analytics() {
 
                   <CartesianGrid
                     strokeDasharray="3 3"
-                    opacity={0.2}
+                    opacity={0.15}
                   />
 
                   <XAxis
                     dataKey="name"
                     tick={{
-                      fontSize: 11,
+                      fontSize: 12,
                     }}
                   />
 
                   <YAxis
-                    tick={{
-                      fontSize: 11,
-                    }}
                     tickFormatter={(value) =>
                       `$${formatNumber(value)}`
                     }
@@ -1194,8 +1014,14 @@ export default function Analytics() {
 
                   <Bar
                     dataKey="value"
-                    fill="#3155ff"
-                    radius={[6, 6, 0, 0]}
+                    fill="#6c63ff"
+                    radius={[
+                      8,
+                      8,
+                      0,
+                      0,
+                    ]}
+                    maxBarSize={70}
                   />
 
                 </BarChart>
@@ -1209,22 +1035,15 @@ export default function Analytics() {
 
       </div>
 
-
-      {/* ============================================ */}
-      {/* FOOTER INFO */}
-      {/* ============================================ */}
-
-      <div className="analytics-footer">
-
-        <BarChart3 size={18} />
-
-        <span>
-          Analytics are generated from your active
-          MetricMind dataset.
-        </span>
-
-      </div>
+      {/* LOADING */}
+      {loading && (
+        <div className="analytics-loading">
+          Loading analytics...
+        </div>
+      )}
 
     </div>
   )
 }
+
+export default Analytics
