@@ -18,19 +18,17 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const token =
-      localStorage.getItem('metricmind_token')
+    const token = localStorage.getItem('metricmind_token')
 
     if (token) {
-      config.headers.Authorization =
-        `Bearer ${token}`
+      config.headers = config.headers || {}
+      config.headers.Authorization = `Bearer ${token}`
     }
 
     return config
   },
   (error) => Promise.reject(error)
 )
-
 
 /* =========================================================
    RESPONSE INTERCEPTOR
@@ -41,24 +39,16 @@ api.interceptors.response.use(
 
   (error) => {
     if (error?.response?.status === 401) {
-      localStorage.removeItem(
-        'metricmind_token'
-      )
+      localStorage.removeItem('metricmind_token')
 
-      if (
-        window.location.pathname !== '/login'
-      ) {
+      if (window.location.pathname !== '/login') {
         window.location.href = '/login'
       }
     }
 
-    return Promise.reject(
-      error?.response?.data?.detail ||
-      error
-    )
+    return Promise.reject(error)
   }
 )
-
 
 /* =========================================================
    API SERVICE
@@ -66,31 +56,25 @@ api.interceptors.response.use(
 
 const apiService = {
 
-  /* -------------------------------------------------------
+  /* =======================================================
      HEALTH
-     ------------------------------------------------------- */
+     ======================================================= */
 
   health() {
     return api.get('/health')
   },
 
 
-  /* -------------------------------------------------------
+  /* =======================================================
      AUTH
-     ------------------------------------------------------- */
+     ======================================================= */
 
   login(data) {
-    return api.post(
-      '/v1/auth/login',
-      data
-    )
+    return api.post('/v1/auth/login', data)
   },
 
   register(data) {
-    return api.post(
-      '/v1/auth/register',
-      data
-    )
+    return api.post('/v1/auth/register', data)
   },
 
   me() {
@@ -98,141 +82,123 @@ const apiService = {
   },
 
   logout() {
-    return api.post(
-      '/v1/auth/logout'
-    )
+    return api.post('/v1/auth/logout')
   },
 
 
-  /* -------------------------------------------------------
+  /* =======================================================
      METRICS
-     ------------------------------------------------------- */
+     ======================================================= */
 
   getMetrics() {
     return api.get('/metrics')
   },
 
 
-  /* -------------------------------------------------------
-     DASHBOARD KPIs
-     ------------------------------------------------------- */
+  /* =======================================================
+     DASHBOARD
+     ======================================================= */
 
   getDashboardKPIs() {
     return api.get('/dashboard/kpis')
   },
 
-
-  /* -------------------------------------------------------
-     REGION
-     ------------------------------------------------------- */
-
   getSalesByRegion() {
-    return api.get(
-      '/dashboard/sales-by-region'
-    )
+    return api.get('/dashboard/sales-by-region')
   },
-
-
-  /* -------------------------------------------------------
-     CATEGORY
-     ------------------------------------------------------- */
 
   getSalesByCategory() {
-    return api.get(
-      '/dashboard/sales-by-category'
-    )
+    return api.get('/dashboard/sales-by-category')
   },
-
-
-  /* -------------------------------------------------------
-     SALES TREND
-     ------------------------------------------------------- */
 
   getSalesTrend(period = 'month') {
-    return api.get(
-      '/dashboard/sales-trend',
-      {
-        params: {
-          period,
-        },
-      }
-    )
+    return api.get('/dashboard/sales-trend', {
+      params: {
+        period,
+      },
+    })
   },
-
-
-  /* -------------------------------------------------------
-     TOP PRODUCTS
-     ------------------------------------------------------- */
 
   getTopProducts() {
-    return api.get(
-      '/dashboard/top-products'
-    )
+    return api.get('/dashboard/top-products')
   },
 
 
-  /* -------------------------------------------------------
+  /* =======================================================
      AI QUERY
-     ------------------------------------------------------- */
+     ======================================================= */
 
   query(data) {
-    return api.post(
-      '/query',
-      data
-    )
+    return api.post('/query', data)
   },
 
 
-  /* -------------------------------------------------------
-     DATASET
-     ------------------------------------------------------- */
+  /* =======================================================
+     DATASETS
+     ======================================================= */
 
-  getDataset(params = {}) {
-    return api.get(
-      '/dataset',
-      {
-        params,
-      }
-    )
+  // GET /api/datasets
+  getDatasets() {
+    return api.get('/datasets')
   },
 
-  uploadDataset(file) {
-    const formData =
-      new FormData()
+  // GET /api/datasets/active
+  getActiveDataset() {
+    return api.get('/datasets/active')
+  },
 
-    formData.append(
-      'file',
-      file
-    )
+  // POST /api/datasets/upload
+  uploadDataset(file, onUploadProgress) {
+    const formData = new FormData()
+
+    formData.append('file', file)
 
     return api.post(
-      '/dataset/upload',
+      '/datasets/upload',
       formData,
       {
         headers: {
-          'Content-Type':
-            'multipart/form-data',
+          'Content-Type': 'multipart/form-data',
         },
+
+        onUploadProgress,
       }
     )
   },
 
-
-  /* -------------------------------------------------------
-     ADD BUSINESS DATA
-     ------------------------------------------------------- */
-
-  addBusinessData(data) {
+  // POST /api/datasets/{id}/activate
+  activateDataset(datasetId) {
     return api.post(
-      '/dataset',
-      data
+      `/datasets/${datasetId}/activate`
+    )
+  },
+
+  // DELETE /api/datasets/{id}
+  deleteDataset(datasetId) {
+    return api.delete(
+      `/datasets/${datasetId}`
     )
   },
 
 
-  /* -------------------------------------------------------
+  /* =======================================================
+     SINGLE DATASET / LEGACY
+     ======================================================= */
+
+  getDataset(params = {}) {
+    return api.get('/dataset', {
+      params,
+    })
+  },
+
+  addBusinessData(data) {
+    return api.post('/dataset', data)
+  },
+
+
+  /* =======================================================
      REPORTS
-     ------------------------------------------------------- */
+     ======================================================= */
 
   getReports() {
     return api.get('/reports')
@@ -246,55 +212,45 @@ const apiService = {
   },
 
 
-  /* -------------------------------------------------------
+  /* =======================================================
      GENERIC GET
-     ------------------------------------------------------- */
+     ======================================================= */
 
   get(url, config = {}) {
-    return api.get(
-      url,
-      config
-    )
+    return api.get(url, config)
   },
 
 
-  /* -------------------------------------------------------
+  /* =======================================================
      GENERIC POST
-     ------------------------------------------------------- */
+     ======================================================= */
 
   post(url, data, config = {}) {
-    return api.post(
-      url,
-      data,
-      config
-    )
+    return api.post(url, data, config)
   },
 
 
-  /* -------------------------------------------------------
+  /* =======================================================
      GENERIC PUT
-     ------------------------------------------------------- */
+     ======================================================= */
 
   put(url, data, config = {}) {
-    return api.put(
-      url,
-      data,
-      config
-    )
+    return api.put(url, data, config)
   },
 
 
-  /* -------------------------------------------------------
+  /* =======================================================
      GENERIC DELETE
-     ------------------------------------------------------- */
+     ======================================================= */
 
   delete(url, config = {}) {
-    return api.delete(
-      url,
-      config
-    )
+    return api.delete(url, config)
   },
 }
+
+/* =========================================================
+   EXPORTS
+   ========================================================= */
 
 export { api }
 
