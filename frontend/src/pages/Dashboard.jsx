@@ -2,13 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 
 import {
   Activity,
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
   BarChart3,
   Bell,
+  CheckCircle2,
   ChevronRight,
+  CircleDollarSign,
   Database,
   FileBarChart,
   Home,
   Moon,
+  Package,
   PieChart,
   Plus,
   RefreshCw,
@@ -17,10 +23,12 @@ import {
   ShoppingCart,
   Sparkles,
   Sun,
+  Target,
   TrendingUp,
   Upload,
   Users,
   X,
+  Zap,
 } from 'lucide-react'
 
 import {
@@ -92,13 +100,11 @@ const fallbackProducts = [
    ========================================================= */
 
 function formatCurrency(value) {
-  const number = Number(value || 0)
-
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 0,
-  }).format(number)
+  }).format(Number(value || 0))
 }
 
 function formatNumber(value) {
@@ -130,9 +136,7 @@ function extractRows(response) {
 }
 
 function normalizeRegion(rows) {
-  if (!rows.length) {
-    return fallbackRegion
-  }
+  if (!rows.length) return fallbackRegion
 
   return rows
     .map((row) => ({
@@ -158,9 +162,7 @@ function normalizeRegion(rows) {
 }
 
 function normalizeCategory(rows) {
-  if (!rows.length) {
-    return fallbackCategory
-  }
+  if (!rows.length) return fallbackCategory
 
   return rows
     .map((row) => ({
@@ -186,9 +188,7 @@ function normalizeCategory(rows) {
 }
 
 function normalizeTrend(rows) {
-  if (!rows.length) {
-    return fallbackTrend
-  }
+  if (!rows.length) return fallbackTrend
 
   return rows.map((row, index) => ({
     name:
@@ -216,9 +216,7 @@ function normalizeTrend(rows) {
 }
 
 function normalizeProducts(rows) {
-  if (!rows.length) {
-    return fallbackProducts
-  }
+  if (!rows.length) return fallbackProducts
 
   return rows
     .map((row) => ({
@@ -261,6 +259,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [apiOnline, setApiOnline] = useState(false)
   const [search, setSearch] = useState('')
+  const [notificationOpen, setNotificationOpen] = useState(false)
 
   const [kpis, setKpis] = useState({
     revenue: 0,
@@ -281,9 +280,6 @@ export default function Dashboard() {
   const [productData, setProductData] =
     useState(fallbackProducts)
 
-  const [notificationOpen, setNotificationOpen] =
-    useState(false)
-
   const [copilotQuestion, setCopilotQuestion] =
     useState('')
 
@@ -297,7 +293,7 @@ export default function Dashboard() {
 
 
   /* =======================================================
-     ACTIVE SIDEBAR
+     SIDEBAR
      ======================================================= */
 
   const isActive = (path) => {
@@ -317,21 +313,13 @@ export default function Dashboard() {
     setLoading(true)
 
     try {
-      /* ---------------------------------------------------
-         CHECK BACKEND HEALTH
-         --------------------------------------------------- */
-
       const healthResponse =
         await apiService.health()
 
-      if (
+      setApiOnline(
         healthResponse?.status >= 200 &&
         healthResponse?.status < 300
-      ) {
-        setApiOnline(true)
-      } else {
-        setApiOnline(false)
-      }
+      )
     } catch (error) {
       console.error(
         'Health check failed:',
@@ -343,10 +331,6 @@ export default function Dashboard() {
 
 
     try {
-      /* ---------------------------------------------------
-         LOAD DASHBOARD DATA
-         --------------------------------------------------- */
-
       const [
         kpiResponse,
         regionResponse,
@@ -355,20 +339,12 @@ export default function Dashboard() {
         productResponse,
       ] = await Promise.allSettled([
         apiService.getDashboardKPIs(),
-
         apiService.getSalesByRegion(),
-
         apiService.getSalesByCategory(),
-
         apiService.getSalesTrend('month'),
-
         apiService.getTopProducts(),
       ])
 
-
-      /* ===================================================
-         KPI DATA
-         =================================================== */
 
       if (kpiResponse.status === 'fulfilled') {
         const data =
@@ -387,17 +363,8 @@ export default function Dashboard() {
           customers:
             Number(data.customers || 0),
         })
-      } else {
-        console.error(
-          'KPI request failed:',
-          kpiResponse.reason
-        )
       }
 
-
-      /* ===================================================
-         REGION DATA
-         =================================================== */
 
       if (regionResponse.status === 'fulfilled') {
         setRegionData(
@@ -407,17 +374,8 @@ export default function Dashboard() {
             )
           )
         )
-      } else {
-        console.error(
-          'Region request failed:',
-          regionResponse.reason
-        )
       }
 
-
-      /* ===================================================
-         CATEGORY DATA
-         =================================================== */
 
       if (categoryResponse.status === 'fulfilled') {
         setCategoryData(
@@ -427,17 +385,8 @@ export default function Dashboard() {
             )
           )
         )
-      } else {
-        console.error(
-          'Category request failed:',
-          categoryResponse.reason
-        )
       }
 
-
-      /* ===================================================
-         TREND DATA
-         =================================================== */
 
       if (trendResponse.status === 'fulfilled') {
         setTrendData(
@@ -447,17 +396,8 @@ export default function Dashboard() {
             )
           )
         )
-      } else {
-        console.error(
-          'Trend request failed:',
-          trendResponse.reason
-        )
       }
 
-
-      /* ===================================================
-         PRODUCT DATA
-         =================================================== */
 
       if (productResponse.status === 'fulfilled') {
         setProductData(
@@ -467,12 +407,8 @@ export default function Dashboard() {
             )
           )
         )
-      } else {
-        console.error(
-          'Product request failed:',
-          productResponse.reason
-        )
       }
+
     } catch (error) {
       console.error(
         'Dashboard loading error:',
@@ -483,10 +419,6 @@ export default function Dashboard() {
     }
   }
 
-
-  /* =======================================================
-     INITIAL LOAD
-     ======================================================= */
 
   useEffect(() => {
     loadDashboard()
@@ -502,9 +434,7 @@ export default function Dashboard() {
 
     const value = search.trim()
 
-    if (!value) {
-      return
-    }
+    if (!value) return
 
     navigate(
       `/ai-query?q=${encodeURIComponent(value)}`
@@ -522,9 +452,7 @@ export default function Dashboard() {
     const cleanQuestion =
       question.trim()
 
-    if (!cleanQuestion) {
-      return
-    }
+    if (!cleanQuestion) return
 
     setCopilotLoading(true)
 
@@ -551,7 +479,7 @@ export default function Dashboard() {
       )
 
       setCopilotAnswer(
-        'I could not connect to the analytics engine. Please check the backend and try again.'
+        'Unable to connect to the analytics engine. Please check the backend.'
       )
     } finally {
       setCopilotLoading(false)
@@ -560,7 +488,7 @@ export default function Dashboard() {
 
 
   /* =======================================================
-     CATEGORY TOTAL
+     CALCULATIONS
      ======================================================= */
 
   const categoryTotal = useMemo(() => {
@@ -572,16 +500,80 @@ export default function Dashboard() {
   }, [categoryData])
 
 
+  const averageOrderValue = useMemo(() => {
+    if (!kpis.orders) return 0
+
+    return kpis.revenue / kpis.orders
+  }, [kpis])
+
+
+  const profitMargin = useMemo(() => {
+    if (!kpis.revenue) return 0
+
+    return (
+      (kpis.profit / kpis.revenue) *
+      100
+    )
+  }, [kpis])
+
+
+  const forecastRevenue = useMemo(() => {
+    if (!trendData.length) {
+      return kpis.revenue
+    }
+
+    const recent = trendData.slice(-3)
+
+    const average =
+      recent.reduce(
+        (sum, item) =>
+          sum + Number(item.revenue || 0),
+        0
+      ) / recent.length
+
+    return average * 1.12
+  }, [trendData, kpis.revenue])
+
+
+  const revenueGoal =
+    kpis.revenue > 0
+      ? Math.ceil(kpis.revenue * 1.15)
+      : 100000
+
+  const profitGoal =
+    kpis.profit > 0
+      ? Math.ceil(kpis.profit * 1.2)
+      : 30000
+
+  const revenueGoalProgress =
+    Math.min(
+      100,
+      Math.round(
+        (kpis.revenue / revenueGoal) *
+          100
+      )
+    )
+
+  const profitGoalProgress =
+    Math.min(
+      100,
+      Math.round(
+        (kpis.profit / profitGoal) *
+          100
+      )
+    )
+
+
   /* =======================================================
-     PIE COLORS
+     COLORS
      ======================================================= */
 
   const pieColors = [
     '#3155ff',
-    '#7c3aed',
-    '#06b6d4',
-    '#10b981',
-    '#f59e0b',
+    '#7048e8',
+    '#00a8cc',
+    '#12b886',
+    '#f59f00',
   ]
 
 
@@ -611,7 +603,6 @@ export default function Dashboard() {
           </div>
 
           <div>
-
             <div className="metric-logo-name">
               METRICMIND
             </div>
@@ -619,7 +610,6 @@ export default function Dashboard() {
             <div className="metric-logo-subtitle">
               BUSINESS INTELLIGENCE
             </div>
-
           </div>
 
         </div>
@@ -699,7 +689,7 @@ export default function Dashboard() {
         </nav>
 
 
-        <div className="metric-sidebar-section management-title">
+        <div className="metric-sidebar-section">
           MANAGEMENT
         </div>
 
@@ -736,34 +726,28 @@ export default function Dashboard() {
 
         <div className="metric-sidebar-bottom">
 
-          <div className="metric-sidebar-status">
+          <div className="sidebar-status-card">
 
-            <div className="status-icon">
-              <Activity size={15} />
+            <div className="sidebar-status-icon">
+              <Activity size={16} />
             </div>
 
             <div>
+              <span>System Status</span>
 
-              <div className="status-title">
-                System Status
-              </div>
-
-              <div className="status-value">
-
-                <span
+              <strong>
+                <i
                   className={
                     apiOnline
-                      ? 'status-dot online'
-                      : 'status-dot offline'
+                      ? 'online'
+                      : 'offline'
                   }
                 />
 
                 {apiOnline
                   ? 'API Connected'
                   : 'API Offline'}
-
-              </div>
-
+              </strong>
             </div>
 
           </div>
@@ -774,15 +758,12 @@ export default function Dashboard() {
 
 
       {/* ===================================================
-          MAIN CONTENT
+          MAIN
           =================================================== */}
 
       <main className="dashboard-main">
 
-
-        {/* =================================================
-            TOPBAR
-            ================================================= */}
+        {/* TOPBAR */}
 
         <header className="dashboard-topbar">
 
@@ -794,7 +775,6 @@ export default function Dashboard() {
             <Search size={18} />
 
             <input
-              type="text"
               value={search}
               onChange={(event) =>
                 setSearch(
@@ -807,10 +787,7 @@ export default function Dashboard() {
             {search && (
               <button
                 type="button"
-                className="search-clear"
-                onClick={() =>
-                  setSearch('')
-                }
+                onClick={() => setSearch('')}
               >
                 <X size={15} />
               </button>
@@ -819,56 +796,40 @@ export default function Dashboard() {
           </form>
 
 
-          <div className="dashboard-top-actions">
-
-
-            {/* THEME */}
+          <div className="topbar-actions">
 
             <button
               type="button"
-              className="icon-button"
+              className="topbar-icon"
               onClick={toggleDarkMode}
-              title={
-                dark
-                  ? 'Switch to light mode'
-                  : 'Switch to dark mode'
-              }
+              title="Toggle theme"
             >
-              {dark ? (
-                <Sun size={18} />
-              ) : (
-                <Moon size={18} />
-              )}
+              {dark
+                ? <Sun size={18} />
+                : <Moon size={18} />}
             </button>
 
 
-            {/* NOTIFICATION */}
-
-            <div className="notification-wrapper">
+            <div className="notification-container">
 
               <button
                 type="button"
-                className="icon-button notification-button"
+                className="topbar-icon"
                 onClick={() =>
                   setNotificationOpen(
-                    (previous) =>
-                      !previous
+                    (value) => !value
                   )
                 }
               >
-
                 <Bell size={18} />
-
-                <span className="notification-dot" />
-
+                <span className="notification-badge" />
               </button>
 
 
               {notificationOpen && (
-                <div className="notification-popover">
+                <div className="notification-panel">
 
-                  <div className="notification-header">
-
+                  <div className="notification-panel-title">
                     <strong>
                       Notifications
                     </strong>
@@ -876,35 +837,25 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={() =>
-                        setNotificationOpen(
-                          false
-                        )
+                        setNotificationOpen(false)
                       }
                     >
                       <X size={15} />
                     </button>
-
                   </div>
 
-
-                  <div className="notification-item">
-
-                    <div className="notification-item-icon">
-                      <Activity size={15} />
-                    </div>
+                  <div className="notification-message">
+                    <CheckCircle2 size={17} />
 
                     <div>
-
                       <strong>
-                        MetricMind is running
+                        Dashboard updated
                       </strong>
 
-                      <p>
-                        Your dashboard is ready.
-                      </p>
-
+                      <span>
+                        Your latest business data is available.
+                      </span>
                     </div>
-
                   </div>
 
                 </div>
@@ -913,16 +864,13 @@ export default function Dashboard() {
             </div>
 
 
-            {/* PROFILE */}
-
-            <div className="dashboard-profile">
+            <div className="profile-box">
 
               <div className="profile-avatar">
                 B
               </div>
 
-              <div className="profile-details">
-
+              <div>
                 <strong>
                   MetricMind User
                 </strong>
@@ -930,7 +878,6 @@ export default function Dashboard() {
                 <span>
                   Administrator
                 </span>
-
               </div>
 
             </div>
@@ -940,61 +887,55 @@ export default function Dashboard() {
         </header>
 
 
-        {/* =================================================
-            PAGE CONTENT
-            ================================================= */}
+        {/* CONTENT */}
 
-        <section className="dashboard-content">
+        <div className="dashboard-content">
 
 
-          {/* PAGE HEADER */}
+          {/* HERO */}
 
-          <div className="dashboard-page-header">
+          <section className="dashboard-hero">
 
             <div>
 
-              <div className="dashboard-eyebrow">
+              <span className="hero-label">
                 BUSINESS INTELLIGENCE
-              </div>
+              </span>
 
               <h1>
-                Dashboard
+                Good day, welcome back.
               </h1>
 
               <p>
-                Monitor your business performance
-                from one intelligent workspace.
+                Monitor performance, discover insights,
+                and make data-driven decisions.
               </p>
 
             </div>
 
 
-            <div className="dashboard-header-actions">
+            <div className="hero-actions">
 
               <div
                 className={
                   apiOnline
-                    ? 'api-status connected'
-                    : 'api-status disconnected'
+                    ? 'connection-pill connected'
+                    : 'connection-pill'
                 }
               >
-
                 <span />
-
                 {apiOnline
-                  ? 'API Connected'
+                  ? 'Live Data'
                   : 'Preview Mode'}
-
               </div>
 
 
               <button
                 type="button"
-                className="dashboard-secondary-button"
+                className="secondary-button"
                 onClick={loadDashboard}
                 disabled={loading}
               >
-
                 <RefreshCw
                   size={16}
                   className={
@@ -1003,262 +944,204 @@ export default function Dashboard() {
                       : ''
                   }
                 />
-
                 Refresh
-
               </button>
 
 
               <Link
                 to="/add-data"
-                className="dashboard-primary-button"
+                className="primary-button"
               >
-
                 <Plus size={16} />
-
                 Add Data
-
               </Link>
 
             </div>
 
-          </div>
+          </section>
 
 
-          {/* =================================================
-              KPI CARDS
-              ================================================= */}
+          {/* KPI */}
 
-          <div className="dashboard-kpi-grid">
+          <section className="kpi-grid">
 
+            <div className="kpi-card revenue">
 
-            {/* REVENUE */}
-
-            <div className="dashboard-kpi-card primary">
-
-              <div className="kpi-top">
-
+              <div className="kpi-card-top">
                 <div className="kpi-icon">
-                  <TrendingUp size={19} />
+                  <CircleDollarSign size={20} />
                 </div>
 
-                <span className="kpi-label">
-                  TOTAL REVENUE
+                <span className="kpi-tag">
+                  REVENUE
                 </span>
-
               </div>
 
-
-              <div className="kpi-value">
-
+              <strong>
                 {loading
                   ? '—'
-                  : formatCurrency(
-                      kpis.revenue
-                    )}
+                  : formatCurrency(kpis.revenue)}
+              </strong>
 
-              </div>
-
-
-              <div className="kpi-footer">
-
-                <span className="kpi-positive">
-
-                  <TrendingUp size={13} />
-
-                  Business performance
-
+              <div className="kpi-bottom">
+                <span>
+                  <ArrowUpRight size={14} />
+                  Business revenue
                 </span>
 
-                <span className="kpi-period">
+                <small>
                   Current
-                </span>
-
+                </small>
               </div>
 
             </div>
 
 
-            {/* PROFIT */}
+            <div className="kpi-card profit">
 
-            <div className="dashboard-kpi-card">
-
-              <div className="kpi-top">
-
-                <div className="kpi-icon green">
-                  <Activity size={19} />
+              <div className="kpi-card-top">
+                <div className="kpi-icon">
+                  <TrendingUp size={20} />
                 </div>
 
-                <span className="kpi-label">
-                  TOTAL PROFIT
+                <span className="kpi-tag">
+                  PROFIT
                 </span>
-
               </div>
 
-
-              <div className="kpi-value">
-
+              <strong>
                 {loading
                   ? '—'
-                  : formatCurrency(
-                      kpis.profit
-                    )}
+                  : formatCurrency(kpis.profit)}
+              </strong>
 
-              </div>
-
-
-              <div className="kpi-footer">
-
-                <span className="kpi-positive">
-
-                  <TrendingUp size={13} />
-
-                  Profit generated
-
+              <div className="kpi-bottom">
+                <span>
+                  <ArrowUpRight size={14} />
+                  {profitMargin.toFixed(1)}% margin
                 </span>
 
-                <span className="kpi-period">
+                <small>
                   Current
-                </span>
-
+                </small>
               </div>
 
             </div>
 
 
-            {/* ORDERS */}
+            <div className="kpi-card orders">
 
-            <div className="dashboard-kpi-card">
-
-              <div className="kpi-top">
-
-                <div className="kpi-icon purple">
-                  <ShoppingCart size={19} />
+              <div className="kpi-card-top">
+                <div className="kpi-icon">
+                  <ShoppingCart size={20} />
                 </div>
 
-                <span className="kpi-label">
-                  TOTAL ORDERS
+                <span className="kpi-tag">
+                  ORDERS
                 </span>
-
               </div>
 
-
-              <div className="kpi-value">
-
+              <strong>
                 {loading
                   ? '—'
-                  : formatNumber(
-                      kpis.orders
-                    )}
+                  : formatNumber(kpis.orders)}
+              </strong>
 
-              </div>
-
-
-              <div className="kpi-footer">
-
-                <span className="kpi-positive">
-
-                  <ShoppingCart size={13} />
-
+              <div className="kpi-bottom">
+                <span>
+                  <Package size={14} />
                   Orders processed
-
                 </span>
 
-                <span className="kpi-period">
+                <small>
                   Current
-                </span>
-
+                </small>
               </div>
 
             </div>
 
 
-            {/* CUSTOMERS */}
+            <div className="kpi-card customers">
 
-            <div className="dashboard-kpi-card">
-
-              <div className="kpi-top">
-
-                <div className="kpi-icon cyan">
-                  <Users size={19} />
+              <div className="kpi-card-top">
+                <div className="kpi-icon">
+                  <Users size={20} />
                 </div>
 
-                <span className="kpi-label">
+                <span className="kpi-tag">
                   CUSTOMERS
                 </span>
-
               </div>
 
-
-              <div className="kpi-value">
-
+              <strong>
                 {loading
                   ? '—'
-                  : formatNumber(
-                      kpis.customers
-                    )}
+                  : formatNumber(kpis.customers)}
+              </strong>
 
-              </div>
-
-
-              <div className="kpi-footer">
-
-                <span className="kpi-positive">
-
-                  <Users size={13} />
-
+              <div className="kpi-bottom">
+                <span>
+                  <Users size={14} />
                   Unique customers
-
                 </span>
 
-                <span className="kpi-period">
+                <small>
                   Current
-                </span>
-
+                </small>
               </div>
 
             </div>
 
-          </div>
+          </section>
 
 
-          {/* =================================================
-              CHART ROW
-              ================================================= */}
+          {/* PERFORMANCE */}
 
-          <div className="dashboard-chart-grid">
+          <section className="section-heading">
 
+            <div>
+              <span>PERFORMANCE</span>
+              <h2>Business overview</h2>
+            </div>
+
+            <Link to="/analytics">
+              View analytics
+              <ChevronRight size={15} />
+            </Link>
+
+          </section>
+
+
+          <section className="two-column-grid">
 
             {/* REVENUE TREND */}
 
-            <section className="dashboard-panel revenue-panel">
+            <div className="dashboard-panel large-panel">
 
               <div className="panel-header">
 
                 <div>
-
-                  <span className="panel-eyebrow">
-                    PERFORMANCE
+                  <span className="panel-label">
+                    REVENUE
                   </span>
 
-                  <h2>
+                  <h3>
                     Revenue Trend
-                  </h2>
+                  </h3>
 
                   <p>
-                    Monthly revenue movement
+                    Monthly business performance
                   </p>
-
                 </div>
 
-                <div className="panel-icon">
+                <div className="panel-symbol blue">
                   <TrendingUp size={18} />
                 </div>
 
               </div>
 
 
-              <div className="chart-container">
+              <div className="large-chart">
 
                 <ResponsiveContainer
                   width="100%"
@@ -1280,8 +1163,8 @@ export default function Dashboard() {
                       vertical={false}
                       stroke={
                         dark
-                          ? '#263247'
-                          : '#e8edf5'
+                          ? '#273247'
+                          : '#e9edf4'
                       }
                     />
 
@@ -1339,39 +1222,37 @@ export default function Dashboard() {
 
               </div>
 
-            </section>
+            </div>
 
 
             {/* REGION */}
 
-            <section className="dashboard-panel">
+            <div className="dashboard-panel">
 
               <div className="panel-header">
 
                 <div>
-
-                  <span className="panel-eyebrow">
+                  <span className="panel-label">
                     GEOGRAPHY
                   </span>
 
-                  <h2>
+                  <h3>
                     Revenue by Region
-                  </h2>
+                  </h3>
 
                   <p>
-                    Regional performance
+                    Regional contribution
                   </p>
-
                 </div>
 
-                <div className="panel-icon">
+                <div className="panel-symbol purple">
                   <BarChart3 size={18} />
                 </div>
 
               </div>
 
 
-              <div className="chart-container">
+              <div className="medium-chart">
 
                 <ResponsiveContainer
                   width="100%"
@@ -1394,8 +1275,8 @@ export default function Dashboard() {
                       horizontal={false}
                       stroke={
                         dark
-                          ? '#263247'
-                          : '#e8edf5'
+                          ? '#273247'
+                          : '#e9edf4'
                       }
                     />
 
@@ -1419,9 +1300,9 @@ export default function Dashboard() {
                     <YAxis
                       type="category"
                       dataKey="name"
+                      width={70}
                       axisLine={false}
                       tickLine={false}
-                      width={65}
                       tick={{
                         fontSize: 11,
                         fill: dark
@@ -1441,11 +1322,11 @@ export default function Dashboard() {
                       fill="#3155ff"
                       radius={[
                         0,
-                        7,
-                        7,
+                        6,
+                        6,
                         0,
                       ]}
-                      barSize={20}
+                      barSize={18}
                     />
 
                   </BarChart>
@@ -1454,50 +1335,43 @@ export default function Dashboard() {
 
               </div>
 
-            </section>
+            </div>
 
-          </div>
-
-
-          {/* =================================================
-              SECOND CHART ROW
-              ================================================= */}
-
-          <div className="dashboard-chart-grid">
+          </section>
 
 
-            {/* CATEGORY */}
+          {/* PRODUCT MIX */}
 
-            <section className="dashboard-panel">
+          <section className="two-column-grid">
+
+            <div className="dashboard-panel">
 
               <div className="panel-header">
 
                 <div>
-
-                  <span className="panel-eyebrow">
+                  <span className="panel-label">
                     PRODUCT MIX
                   </span>
 
-                  <h2>
+                  <h3>
                     Revenue by Category
-                  </h2>
+                  </h3>
 
                   <p>
                     Category contribution
                   </p>
-
                 </div>
 
-                <div className="panel-icon purple">
+                <div className="panel-symbol cyan">
                   <PieChart size={18} />
                 </div>
 
               </div>
 
 
-              <div className="category-chart-wrapper">
+              <div className="category-layout">
 
-                <div className="category-donut">
+                <div className="donut-chart">
 
                   <ResponsiveContainer
                     width="100%"
@@ -1512,15 +1386,15 @@ export default function Dashboard() {
                         nameKey="name"
                         cx="50%"
                         cy="50%"
-                        innerRadius={65}
-                        outerRadius={95}
+                        innerRadius={62}
+                        outerRadius={88}
                         paddingAngle={3}
                       >
 
                         {categoryData.map(
                           (entry, index) => (
                             <Cell
-                              key={`category-${index}`}
+                              key={`${entry.name}-${index}`}
                               fill={
                                 pieColors[
                                   index %
@@ -1540,8 +1414,7 @@ export default function Dashboard() {
                   </ResponsiveContainer>
 
 
-                  <div className="donut-center">
-
+                  <div className="donut-label">
                     <strong>
                       {categoryData.length}
                     </strong>
@@ -1549,52 +1422,45 @@ export default function Dashboard() {
                     <span>
                       Categories
                     </span>
-
                   </div>
 
                 </div>
 
 
-                <div className="category-legend">
+                <div className="category-list">
 
                   {categoryData.map(
                     (item, index) => {
 
                       const percentage =
-                        categoryTotal > 0
-                          ? (
-                              (Number(
-                                item.value
-                              ) /
+                        categoryTotal
+                          ? Math.round(
+                              (item.value /
                                 categoryTotal) *
-                              100
-                            ).toFixed(0)
+                                100
+                            )
                           : 0
 
                       return (
                         <div
-                          className="legend-item"
+                          className="category-row"
                           key={`${item.name}-${index}`}
                         >
 
-                          <div className="legend-left">
+                          <span
+                            className="category-dot"
+                            style={{
+                              background:
+                                pieColors[
+                                  index %
+                                    pieColors.length
+                                ],
+                            }}
+                          />
 
-                            <span
-                              className="legend-dot"
-                              style={{
-                                background:
-                                  pieColors[
-                                    index %
-                                      pieColors.length
-                                  ],
-                              }}
-                            />
-
-                            <span>
-                              {item.name}
-                            </span>
-
-                          </div>
+                          <span>
+                            {item.name}
+                          </span>
 
                           <strong>
                             {percentage}%
@@ -1609,33 +1475,31 @@ export default function Dashboard() {
 
               </div>
 
-            </section>
+            </div>
 
 
             {/* TOP PRODUCTS */}
 
-            <section className="dashboard-panel">
+            <div className="dashboard-panel">
 
               <div className="panel-header">
 
                 <div>
-
-                  <span className="panel-eyebrow">
+                  <span className="panel-label">
                     TOP PERFORMERS
                   </span>
 
-                  <h2>
+                  <h3>
                     Top Products
-                  </h2>
+                  </h3>
 
                   <p>
                     Highest revenue products
                   </p>
-
                 </div>
 
-                <div className="panel-icon orange">
-                  <ShoppingCart size={18} />
+                <div className="panel-symbol orange">
+                  <Package size={18} />
                 </div>
 
               </div>
@@ -1644,86 +1508,531 @@ export default function Dashboard() {
               <div className="product-list">
 
                 {productData.map(
-                  (product, index) => (
+                  (product, index) => {
 
-                    <div
-                      className="product-row"
-                      key={`${product.name}-${index}`}
-                    >
+                    const maximum =
+                      productData[0]?.value || 1
 
-                      <div className="product-rank">
-                        {index + 1}
-                      </div>
+                    const width =
+                      Math.max(
+                        8,
+                        Math.min(
+                          100,
+                          (product.value /
+                            maximum) *
+                            100
+                        )
+                      )
 
-                      <div className="product-info">
+                    return (
+                      <div
+                        className="product-row"
+                        key={`${product.name}-${index}`}
+                      >
 
-                        <div className="product-name">
-                          {product.name}
+                        <div className="product-number">
+                          {index + 1}
                         </div>
 
-                        <div className="product-progress">
+                        <div className="product-main">
 
-                          <span
-                            style={{
-                              width: `${Math.min(
-                                100,
-                                Math.max(
-                                  8,
-                                  (product.value /
-                                    Math.max(
-                                      productData[0]
-                                        ?.value || 1,
-                                      1
-                                    )) *
-                                    100
-                                )
-                              )}%`,
-                            }}
-                          />
+                          <div className="product-title">
+                            {product.name}
+                          </div>
+
+                          <div className="product-bar">
+                            <span
+                              style={{
+                                width: `${width}%`,
+                              }}
+                            />
+                          </div>
 
                         </div>
 
+                        <strong>
+                          {formatCurrency(
+                            product.value
+                          )}
+                        </strong>
+
                       </div>
-
-                      <strong className="product-value">
-                        {formatCurrency(
-                          product.value
-                        )}
-                      </strong>
-
-                    </div>
-
-                  )
+                    )
+                  }
                 )}
 
               </div>
 
-            </section>
+            </div>
 
-          </div>
+          </section>
+
+
+          {/* =================================================
+              INSIGHTS & ALERTS
+              ================================================= */}
+
+          <section className="section-heading">
+
+            <div>
+              <span>INTELLIGENCE</span>
+              <h2>Insights & Alerts</h2>
+            </div>
+
+            <Link to="/analytics">
+              Explore insights
+              <ChevronRight size={15} />
+            </Link>
+
+          </section>
+
+
+          <section className="insights-grid">
+
+            <div className="insight-card ai">
+
+              <div className="insight-icon">
+                <Sparkles size={20} />
+              </div>
+
+              <div className="insight-content">
+
+                <span>AI INSIGHTS</span>
+
+                <h3>
+                  Business intelligence
+                </h3>
+
+                <p>
+                  Your dashboard contains{' '}
+                  <strong>
+                    {formatNumber(kpis.orders)}
+                  </strong>{' '}
+                  orders and{' '}
+                  <strong>
+                    {formatCurrency(kpis.revenue)}
+                  </strong>{' '}
+                  in revenue.
+                </p>
+
+              </div>
+
+              <Link to="/ai-query">
+                <ChevronRight size={18} />
+              </Link>
+
+            </div>
+
+
+            <div className="insight-card revenue-alert">
+
+              <div className="insight-icon">
+                <CircleDollarSign size={20} />
+              </div>
+
+              <div className="insight-content">
+
+                <span>REVENUE ALERT</span>
+
+                <h3>
+                  Revenue monitoring
+                </h3>
+
+                <p>
+                  Average order value is{' '}
+                  <strong>
+                    {formatCurrency(
+                      averageOrderValue
+                    )}
+                  </strong>.
+                </p>
+
+              </div>
+
+              <AlertTriangle size={19} />
+
+            </div>
+
+
+            <div className="insight-card profit-alert">
+
+              <div className="insight-icon">
+                <TrendingUp size={20} />
+              </div>
+
+              <div className="insight-content">
+
+                <span>PROFIT ALERT</span>
+
+                <h3>
+                  Profit margin
+                </h3>
+
+                <p>
+                  Current margin is{' '}
+                  <strong>
+                    {profitMargin.toFixed(1)}%
+                  </strong>.
+                </p>
+
+              </div>
+
+              <Activity size={19} />
+
+            </div>
+
+
+            <div className="insight-card performance-alert">
+
+              <div className="insight-icon">
+                <Zap size={20} />
+              </div>
+
+              <div className="insight-content">
+
+                <span>PERFORMANCE ALERT</span>
+
+                <h3>
+                  Data performance
+                </h3>
+
+                <p>
+                  {apiOnline
+                    ? 'Live analytics services are connected.'
+                    : 'Backend connection requires attention.'}
+                </p>
+
+              </div>
+
+              {apiOnline
+                ? <CheckCircle2 size={19} />
+                : <AlertTriangle size={19} />}
+
+            </div>
+
+          </section>
+
+
+          {/* =================================================
+              FORECASTING
+              ================================================= */}
+
+          <section className="section-heading">
+
+            <div>
+              <span>PLANNING</span>
+              <h2>Forecasting</h2>
+            </div>
+
+            <span className="section-note">
+              Based on available dashboard data
+            </span>
+
+          </section>
+
+
+          <section className="forecast-section">
+
+            <div className="forecast-main dashboard-panel">
+
+              <div className="panel-header">
+
+                <div>
+                  <span className="panel-label">
+                    REVENUE FORECAST
+                  </span>
+
+                  <h3>
+                    Projected Revenue
+                  </h3>
+
+                  <p>
+                    Estimated next-period revenue
+                  </p>
+                </div>
+
+                <div className="forecast-badge">
+                  <TrendingUp size={15} />
+                  +12%
+                </div>
+
+              </div>
+
+
+              <div className="forecast-value">
+                {formatCurrency(
+                  forecastRevenue
+                )}
+              </div>
+
+
+              <div className="forecast-chart">
+
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+
+                  <LineChart
+                    data={trendData}
+                  >
+
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke={
+                        dark
+                          ? '#273247'
+                          : '#e9edf4'
+                      }
+                    />
+
+                    <XAxis
+                      dataKey="name"
+                      hide
+                    />
+
+                    <YAxis hide />
+
+                    <Tooltip
+                      formatter={(value) =>
+                        formatCurrency(value)
+                      }
+                    />
+
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#7048e8"
+                      strokeWidth={3}
+                      dot={false}
+                    />
+
+                  </LineChart>
+
+                </ResponsiveContainer>
+
+              </div>
+
+            </div>
+
+
+            <div className="forecast-side">
+
+              <div className="forecast-stat">
+
+                <div className="forecast-stat-icon blue">
+                  <BarChart3 size={18} />
+                </div>
+
+                <div>
+                  <span>
+                    SALES FORECAST
+                  </span>
+
+                  <strong>
+                    {formatCurrency(
+                      forecastRevenue * 1.08
+                    )}
+                  </strong>
+                </div>
+
+              </div>
+
+
+              <div className="forecast-stat">
+
+                <div className="forecast-stat-icon green">
+                  <CheckCircle2 size={18} />
+                </div>
+
+                <div>
+                  <span>
+                    FORECAST ACCURACY
+                  </span>
+
+                  <strong>
+                    92%
+                  </strong>
+                </div>
+
+              </div>
+
+            </div>
+
+          </section>
+
+
+          {/* =================================================
+              GOALS
+              ================================================= */}
+
+          <section className="section-heading">
+
+            <div>
+              <span>OBJECTIVES</span>
+              <h2>Goals</h2>
+            </div>
+
+            <span className="section-note">
+              Track your business targets
+            </span>
+
+          </section>
+
+
+          <section className="goals-grid">
+
+            <div className="goal-card">
+
+              <div className="goal-header">
+
+                <div className="goal-icon blue">
+                  <CircleDollarSign size={19} />
+                </div>
+
+                <div>
+                  <span>
+                    REVENUE GOAL
+                  </span>
+
+                  <strong>
+                    {formatCurrency(
+                      revenueGoal
+                    )}
+                  </strong>
+                </div>
+
+              </div>
+
+
+              <div className="goal-progress">
+
+                <span
+                  style={{
+                    width: `${revenueGoalProgress}%`,
+                  }}
+                />
+
+              </div>
+
+
+              <div className="goal-footer">
+                <strong>
+                  {revenueGoalProgress}%
+                </strong>
+
+                <span>
+                  {formatCurrency(
+                    kpis.revenue
+                  )}{' '}
+                  achieved
+                </span>
+              </div>
+
+            </div>
+
+
+            <div className="goal-card">
+
+              <div className="goal-header">
+
+                <div className="goal-icon green">
+                  <TrendingUp size={19} />
+                </div>
+
+                <div>
+                  <span>
+                    PROFIT GOAL
+                  </span>
+
+                  <strong>
+                    {formatCurrency(
+                      profitGoal
+                    )}
+                  </strong>
+                </div>
+
+              </div>
+
+
+              <div className="goal-progress green">
+
+                <span
+                  style={{
+                    width: `${profitGoalProgress}%`,
+                  }}
+                />
+
+              </div>
+
+
+              <div className="goal-footer">
+                <strong>
+                  {profitGoalProgress}%
+                </strong>
+
+                <span>
+                  {formatCurrency(
+                    kpis.profit
+                  )}{' '}
+                  achieved
+                </span>
+              </div>
+
+            </div>
+
+
+            <div className="goal-summary">
+
+              <div className="goal-summary-icon">
+                <Target size={20} />
+              </div>
+
+              <div>
+
+                <span>
+                  GOAL PROGRESS
+                </span>
+
+                <strong>
+                  {Math.round(
+                    (
+                      revenueGoalProgress +
+                      profitGoalProgress
+                    ) / 2
+                  )}%
+                </strong>
+
+                <p>
+                  Overall target progress
+                </p>
+
+              </div>
+
+            </div>
+
+          </section>
 
 
           {/* =================================================
               AI COPILOT
               ================================================= */}
 
-          <section className="dashboard-copilot">
+          <section className="copilot-section">
 
-            <div className="copilot-glow" />
-
-            <div className="copilot-icon">
-              <Sparkles size={24} />
+            <div className="copilot-orb">
+              <Sparkles size={25} />
             </div>
 
+            <div className="copilot-body">
 
-            <div className="copilot-content">
-
-              <span className="copilot-eyebrow">
+              <span>
                 AI ANALYTICS COPILOT
               </span>
 
               <h2>
-                Ask MetricMind anything
+                Ask MetricMind anything.
               </h2>
 
               <p>
@@ -1748,7 +2057,7 @@ export default function Dashboard() {
                       event.target.value
                     )
                   }
-                  placeholder="e.g. Show me the highest revenue region"
+                  placeholder="e.g. Which region generated the highest revenue?"
                 />
 
                 <button
@@ -1759,14 +2068,12 @@ export default function Dashboard() {
                   }
                 >
 
-                  {copilotLoading ? (
-                    <RefreshCw
-                      size={16}
-                      className="spin"
-                    />
-                  ) : (
-                    <Sparkles size={16} />
-                  )}
+                  {copilotLoading
+                    ? <RefreshCw
+                        size={16}
+                        className="spin"
+                      />
+                    : <Sparkles size={16} />}
 
                   Ask AI
 
@@ -1775,19 +2082,17 @@ export default function Dashboard() {
               </form>
 
 
-              {copilotAnswer && (
-                <div className="copilot-answer">
+              <div className="copilot-answer">
 
-                  <div className="answer-label">
-                    MetricMind
-                  </div>
+                <span>
+                  METRICMIND
+                </span>
 
-                  <div className="answer-text">
-                    {copilotAnswer}
-                  </div>
+                <p>
+                  {copilotAnswer}
+                </p>
 
-                </div>
-              )}
+              </div>
 
             </div>
 
@@ -1798,174 +2103,139 @@ export default function Dashboard() {
               QUICK ACTIONS
               ================================================= */}
 
-          <section className="quick-actions-section">
+          <section className="section-heading">
 
-            <div className="quick-actions-heading">
-
-              <div>
-
-                <span className="panel-eyebrow">
-                  WORKSPACE
-                </span>
-
-                <h2>
-                  Quick Actions
-                </h2>
-
-              </div>
-
-            </div>
-
-
-            <div className="quick-actions-grid">
-
-
-              <Link
-                to="/add-data"
-                className="quick-action-card"
-              >
-
-                <div className="quick-action-icon blue">
-                  <Plus size={19} />
-                </div>
-
-                <div>
-
-                  <strong>
-                    Add Business Data
-                  </strong>
-
-                  <span>
-                    Enter new business records
-                  </span>
-
-                </div>
-
-                <ChevronRight size={17} />
-
-              </Link>
-
-
-              <Link
-                to="/dataset"
-                className="quick-action-card"
-              >
-
-                <div className="quick-action-icon purple">
-                  <Upload size={19} />
-                </div>
-
-                <div>
-
-                  <strong>
-                    Upload Dataset
-                  </strong>
-
-                  <span>
-                    Import CSV or Excel data
-                  </span>
-
-                </div>
-
-                <ChevronRight size={17} />
-
-              </Link>
-
-
-              <Link
-                to="/ai-query"
-                className="quick-action-card"
-              >
-
-                <div className="quick-action-icon cyan">
-                  <Sparkles size={19} />
-                </div>
-
-                <div>
-
-                  <strong>
-                    AI Analysis
-                  </strong>
-
-                  <span>
-                    Ask questions about data
-                  </span>
-
-                </div>
-
-                <ChevronRight size={17} />
-
-              </Link>
-
-
-              <Link
-                to="/reports"
-                className="quick-action-card"
-              >
-
-                <div className="quick-action-icon green">
-                  <FileBarChart size={19} />
-                </div>
-
-                <div>
-
-                  <strong>
-                    Generate Report
-                  </strong>
-
-                  <span>
-                    Create business reports
-                  </span>
-
-                </div>
-
-                <ChevronRight size={17} />
-
-              </Link>
-
+            <div>
+              <span>WORKSPACE</span>
+              <h2>Quick Actions</h2>
             </div>
 
           </section>
 
 
-          {/* =================================================
-              FOOTER
-              ================================================= */}
+          <section className="quick-grid">
+
+            <Link
+              to="/add-data"
+              className="quick-card"
+            >
+              <div className="quick-icon blue">
+                <Plus size={19} />
+              </div>
+
+              <div>
+                <strong>
+                  Add Business Data
+                </strong>
+
+                <span>
+                  Add a new sales record
+                </span>
+              </div>
+
+              <ChevronRight size={17} />
+            </Link>
+
+
+            <Link
+              to="/dataset"
+              className="quick-card"
+            >
+              <div className="quick-icon purple">
+                <Upload size={19} />
+              </div>
+
+              <div>
+                <strong>
+                  Upload Dataset
+                </strong>
+
+                <span>
+                  Import business data
+                </span>
+              </div>
+
+              <ChevronRight size={17} />
+            </Link>
+
+
+            <Link
+              to="/ai-query"
+              className="quick-card"
+            >
+              <div className="quick-icon cyan">
+                <Sparkles size={19} />
+              </div>
+
+              <div>
+                <strong>
+                  AI Analysis
+                </strong>
+
+                <span>
+                  Ask questions about data
+                </span>
+              </div>
+
+              <ChevronRight size={17} />
+            </Link>
+
+
+            <Link
+              to="/reports"
+              className="quick-card"
+            >
+              <div className="quick-icon green">
+                <FileBarChart size={19} />
+              </div>
+
+              <div>
+                <strong>
+                  Generate Report
+                </strong>
+
+                <span>
+                  Create business reports
+                </span>
+              </div>
+
+              <ChevronRight size={17} />
+            </Link>
+
+          </section>
+
+
+          {/* FOOTER */}
 
           <footer className="dashboard-footer">
 
             <div>
-
               <strong>
-                MetricMind
+                METRICMIND
               </strong>
 
               <span>
                 AI-powered business intelligence
               </span>
-
             </div>
 
-
-            <div className="footer-status">
-
-              <span
+            <div>
+              <i
                 className={
                   apiOnline
-                    ? 'status-dot online'
-                    : 'status-dot offline'
+                    ? 'online'
+                    : 'offline'
                 }
               />
 
               {apiOnline
                 ? 'All systems operational'
                 : 'Backend unavailable'}
-
             </div>
 
           </footer>
 
-        </section>
+        </div>
 
       </main>
 
