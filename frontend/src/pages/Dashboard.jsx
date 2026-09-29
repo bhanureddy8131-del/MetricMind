@@ -277,6 +277,14 @@ export default function Dashboard() {
     orders: 0,
     customers: 0,
   })
+  const [filters, setFilters] = useState({
+  dateFrom: '',
+  dateTo: '',
+  region: '',
+  category: '',
+  paymentMethod: '',
+  shippingMode: '',
+})
 
   const [regionData, setRegionData] =
     useState(fallbackRegion)
