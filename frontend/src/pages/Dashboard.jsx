@@ -271,20 +271,21 @@ export default function Dashboard() {
   const [apiOnline, setApiOnline] = useState(false)
   const [search, setSearch] = useState('')
 
+  const [filters, setFilters] = useState({
+    dateFrom: '',
+    dateTo: '',
+    region: '',
+    category: '',
+    paymentMethod: '',
+    shippingMode: '',
+  })
+
   const [kpis, setKpis] = useState({
     revenue: 0,
     profit: 0,
     orders: 0,
     customers: 0,
   })
-  const [filters, setFilters] = useState({
-  dateFrom: '',
-  dateTo: '',
-  region: '',
-  category: '',
-  paymentMethod: '',
-  shippingMode: '',
-})
 
   const [regionData, setRegionData] =
     useState(fallbackRegion)
@@ -470,6 +471,32 @@ export default function Dashboard() {
     loadDashboard()
   }, [])
 
+
+  /* =======================================================
+     DASHBOARD FILTERS
+     ======================================================= */
+
+  const handleFilterChange = (event) => {
+    const { name, value } = event.target
+
+    setFilters((previous) => ({
+      ...previous,
+      [name]: value,
+    }))
+  }
+
+  const resetFilters = () => {
+    setFilters({
+      dateFrom: '',
+      dateTo: '',
+      region: '',
+      category: '',
+      paymentMethod: '',
+      shippingMode: '',
+    })
+  }
+
+  const activeFilterCount = Object.values(filters).filter(Boolean).length
 
   /* =======================================================
      SEARCH
@@ -1329,6 +1356,90 @@ export default function Dashboard() {
 
           </div>
 
+
+          {/* =================================================
+              ADVANCED DASHBOARD FILTERS
+              ================================================= */}
+
+          <section className="dashboard-filter-panel">
+            <div className="filter-panel-header">
+              <div>
+                <span className="panel-eyebrow">FILTERS</span>
+                <h2>Dashboard Filters</h2>
+                <p>Focus the dashboard on the business data you need.</p>
+              </div>
+
+              <button
+                type="button"
+                className="filter-reset-button"
+                onClick={resetFilters}
+              >
+                <RefreshCw size={15} />
+                Reset Filters
+              </button>
+            </div>
+
+            <div className="dashboard-filter-grid">
+              <div className="dashboard-filter-group">
+                <label htmlFor="dateFrom">Date From</label>
+                <input id="dateFrom" type="date" name="dateFrom" value={filters.dateFrom} onChange={handleFilterChange} />
+              </div>
+              <div className="dashboard-filter-group">
+                <label htmlFor="dateTo">Date To</label>
+                <input id="dateTo" type="date" name="dateTo" value={filters.dateTo} onChange={handleFilterChange} />
+              </div>
+              <div className="dashboard-filter-group">
+                <label htmlFor="region">Region</label>
+                <select id="region" name="region" value={filters.region} onChange={handleFilterChange}>
+                  <option value="">All Regions</option>
+                  <option value="North">North</option>
+                  <option value="South">South</option>
+                  <option value="East">East</option>
+                  <option value="West">West</option>
+                </select>
+              </div>
+              <div className="dashboard-filter-group">
+                <label htmlFor="category">Category</label>
+                <select id="category" name="category" value={filters.category} onChange={handleFilterChange}>
+                  <option value="">All Categories</option>
+                  <option value="Technology">Technology</option>
+                  <option value="Furniture">Furniture</option>
+                  <option value="Office Supplies">Office Supplies</option>
+                </select>
+              </div>
+              <div className="dashboard-filter-group">
+                <label htmlFor="paymentMethod">Payment Method</label>
+                <select id="paymentMethod" name="paymentMethod" value={filters.paymentMethod} onChange={handleFilterChange}>
+                  <option value="">All Payments</option>
+                  <option value="UPI">UPI</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Credit Card">Credit Card</option>
+                  <option value="Debit Card">Debit Card</option>
+                  <option value="Net Banking">Net Banking</option>
+                </select>
+              </div>
+              <div className="dashboard-filter-group">
+                <label htmlFor="shippingMode">Shipping Mode</label>
+                <select id="shippingMode" name="shippingMode" value={filters.shippingMode} onChange={handleFilterChange}>
+                  <option value="">All Shipping</option>
+                  <option value="Standard Class">Standard Class</option>
+                  <option value="Second Class">Second Class</option>
+                  <option value="First Class">First Class</option>
+                  <option value="Same Day">Same Day</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="active-filter-status">
+              <span className="active-filter-dot" />
+              <strong>Filters ready</strong>
+              <span>
+                {activeFilterCount === 0
+                  ? 'Showing all business data'
+                  : `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} selected`}
+              </span>
+            </div>
+          </section>
 
           {/* =================================================
               KPI CARDS
