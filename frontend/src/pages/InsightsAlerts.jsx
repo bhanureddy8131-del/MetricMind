@@ -1531,4 +1531,4 @@ function UsersIcon({ size = 20 }) {
 }
 
 
-export default InsightsAlerts
+export default InsightsAlert
