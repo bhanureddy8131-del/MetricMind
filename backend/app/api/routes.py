@@ -6,12 +6,13 @@ FastAPI routes for MetricMind.
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from typing import Optional
 
 import bcrypt
 from jose import JWTError, jwt
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from sqlalchemy.orm import Session
@@ -107,7 +108,6 @@ def verify_password(
             plain_password.encode("utf-8"),
             hashed_password.encode("utf-8"),
         )
-
     except Exception:
         return False
 
@@ -166,13 +166,7 @@ def get_current_user(
     ),
     db: Session = Depends(get_db),
 ):
-    """
-    Get logged-in user from JWT token.
-    """
-
-    # --------------------------------------------------------
-    # Check Authorization header
-    # --------------------------------------------------------
+    """Get logged-in user from JWT token."""
 
     if credentials is None:
         logger.warning(
@@ -184,25 +178,13 @@ def get_current_user(
             detail="Authentication required",
         )
 
-    # --------------------------------------------------------
-    # Get token
-    # --------------------------------------------------------
-
     token = credentials.credentials
 
     if not token:
-        logger.warning(
-            "Authentication failed: empty token"
-        )
-
         raise HTTPException(
             status_code=401,
             detail="Authentication token missing",
         )
-
-    # --------------------------------------------------------
-    # Decode JWT
-    # --------------------------------------------------------
 
     try:
         payload = jwt.decode(
@@ -221,17 +203,9 @@ def get_current_user(
             detail="Invalid or expired authentication token",
         )
 
-    # --------------------------------------------------------
-    # Get user ID
-    # --------------------------------------------------------
-
     user_id = payload.get("sub")
 
     if not user_id:
-        logger.warning(
-            "Authentication failed: JWT has no user ID"
-        )
-
         raise HTTPException(
             status_code=401,
             detail="Invalid authentication token",
@@ -239,20 +213,11 @@ def get_current_user(
 
     try:
         user_id = int(user_id)
-
     except (TypeError, ValueError):
-        logger.warning(
-            "Authentication failed: invalid user ID"
-        )
-
         raise HTTPException(
             status_code=401,
             detail="Invalid authentication token",
         )
-
-    # --------------------------------------------------------
-    # Find user
-    # --------------------------------------------------------
 
     user = (
         db.query(User)
@@ -261,30 +226,80 @@ def get_current_user(
     )
 
     if user is None:
-        logger.warning(
-            f"Authentication failed: user {user_id} not found"
-        )
-
         raise HTTPException(
             status_code=401,
             detail="User not found",
         )
 
-    # --------------------------------------------------------
-    # Check active account
-    # --------------------------------------------------------
-
     if not user.is_active:
-        logger.warning(
-            f"Authentication failed: user {user_id} inactive"
-        )
-
         raise HTTPException(
             status_code=403,
             detail="User account is inactive",
         )
 
     return user
+
+
+# ============================================================
+# DASHBOARD FILTER HELPERS
+# ============================================================
+
+def validate_dashboard_dates(
+    date_from: Optional[date],
+    date_to: Optional[date],
+):
+    """
+    Validate dashboard date range.
+    """
+
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status_code=400,
+            detail="Date From cannot be later than Date To.",
+        )
+
+
+def apply_dashboard_filters(
+    query,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    region: Optional[str] = None,
+    category: Optional[str] = None,
+    shipping_mode: Optional[str] = None,
+):
+    """
+    Apply common dashboard filters to a SQLAlchemy query.
+
+    Database column:
+        shipping_mode -> SalesRecord.ship_mode
+    """
+
+    if date_from:
+        query = query.filter(
+            SalesRecord.order_date >= date_from
+        )
+
+    if date_to:
+        query = query.filter(
+            SalesRecord.order_date <= date_to
+        )
+
+    if region:
+        query = query.filter(
+            SalesRecord.region == region
+        )
+
+    if category:
+        query = query.filter(
+            SalesRecord.category == category
+        )
+
+    if shipping_mode:
+        query = query.filter(
+            SalesRecord.ship_mode == shipping_mode
+        )
+
+    return query
 
 
 # ============================================================
@@ -358,71 +373,106 @@ def list_metrics():
 
 @router.get("/dashboard/kpis")
 def dashboard_kpis(
+    date_from: Optional[date] = Query(
+        default=None
+    ),
+    date_to: Optional[date] = Query(
+        default=None
+    ),
+    region: Optional[str] = Query(
+        default=None
+    ),
+    category: Optional[str] = Query(
+        default=None
+    ),
+    shipping_mode: Optional[str] = Query(
+        default=None
+    ),
     db: Session = Depends(get_db),
 ):
     """
-    Return real KPI values from the sales table.
+    Return dashboard KPIs using the selected filters.
     """
 
     try:
-
-        # ----------------------------------------------------
-        # Total Revenue
-        # ----------------------------------------------------
-
-        revenue = (
-            db.query(
-                func.coalesce(
-                    func.sum(SalesRecord.sales),
-                    0,
-                )
-            )
-            .scalar()
+        validate_dashboard_dates(
+            date_from,
+            date_to,
         )
 
-        # ----------------------------------------------------
-        # Total Profit
-        # ----------------------------------------------------
-
-        profit = (
-            db.query(
-                func.coalesce(
-                    func.sum(SalesRecord.profit),
-                    0,
-                )
+        revenue_query = db.query(
+            func.coalesce(
+                func.sum(SalesRecord.sales),
+                0,
             )
-            .scalar()
         )
 
-        # ----------------------------------------------------
-        # Unique Orders
-        # ----------------------------------------------------
-
-        orders = (
-            db.query(
-                func.count(
-                    func.distinct(
-                        SalesRecord.order_id
-                    )
-                )
-            )
-            .scalar()
+        revenue_query = apply_dashboard_filters(
+            revenue_query,
+            date_from,
+            date_to,
+            region,
+            category,
+            shipping_mode,
         )
 
-        # ----------------------------------------------------
-        # Unique Customers
-        # ----------------------------------------------------
+        revenue = revenue_query.scalar()
 
-        customers = (
-            db.query(
-                func.count(
-                    func.distinct(
-                        SalesRecord.customer_id
-                    )
+        profit_query = db.query(
+            func.coalesce(
+                func.sum(SalesRecord.profit),
+                0,
+            )
+        )
+
+        profit_query = apply_dashboard_filters(
+            profit_query,
+            date_from,
+            date_to,
+            region,
+            category,
+            shipping_mode,
+        )
+
+        profit = profit_query.scalar()
+
+        orders_query = db.query(
+            func.count(
+                func.distinct(
+                    SalesRecord.order_id
                 )
             )
-            .scalar()
         )
+
+        orders_query = apply_dashboard_filters(
+            orders_query,
+            date_from,
+            date_to,
+            region,
+            category,
+            shipping_mode,
+        )
+
+        orders = orders_query.scalar()
+
+        customers_query = db.query(
+            func.count(
+                func.distinct(
+                    SalesRecord.customer_id
+                )
+            )
+        )
+
+        customers_query = apply_dashboard_filters(
+            customers_query,
+            date_from,
+            date_to,
+            region,
+            category,
+            shipping_mode,
+        )
+
+        customers = customers_query.scalar()
 
         return {
             "revenue": round(
@@ -440,6 +490,9 @@ def dashboard_kpis(
                 customers or 0
             ),
         }
+
+    except HTTPException:
+        raise
 
     except Exception as e:
         logger.error(
@@ -459,25 +512,55 @@ def dashboard_kpis(
 
 @router.get("/dashboard/sales-by-region")
 def sales_by_region(
+    date_from: Optional[date] = Query(
+        default=None
+    ),
+    date_to: Optional[date] = Query(
+        default=None
+    ),
+    region: Optional[str] = Query(
+        default=None
+    ),
+    category: Optional[str] = Query(
+        default=None
+    ),
+    shipping_mode: Optional[str] = Query(
+        default=None
+    ),
     db: Session = Depends(get_db),
 ):
     """
-    Return total sales grouped by region.
+    Return total sales grouped by region
+    using the selected filters.
     """
 
     try:
+        validate_dashboard_dates(
+            date_from,
+            date_to,
+        )
+
+        query = db.query(
+            SalesRecord.region.label("region"),
+            func.coalesce(
+                func.sum(SalesRecord.sales),
+                0,
+            ).label("sales"),
+        ).filter(
+            SalesRecord.region.isnot(None)
+        )
+
+        query = apply_dashboard_filters(
+            query,
+            date_from,
+            date_to,
+            region,
+            category,
+            shipping_mode,
+        )
 
         results = (
-            db.query(
-                SalesRecord.region.label("region"),
-                func.coalesce(
-                    func.sum(SalesRecord.sales),
-                    0,
-                ).label("sales"),
-            )
-            .filter(
-                SalesRecord.region.isnot(None)
-            )
+            query
             .group_by(
                 SalesRecord.region
             )
@@ -489,31 +572,26 @@ def sales_by_region(
             .all()
         )
 
-        data = []
-
-        for row in results:
-
-            data.append(
-                {
-                    "region": str(row.region),
-                    "sales": round(
-                        float(row.sales or 0),
-                        2,
-                    ),
-                }
-            )
-
-        logger.info(
-            f"Sales by region returned {len(data)} rows"
-        )
+        data = [
+            {
+                "region": str(row.region),
+                "sales": round(
+                    float(row.sales or 0),
+                    2,
+                ),
+            }
+            for row in results
+        ]
 
         return {
             "data": data,
             "count": len(data),
         }
 
-    except Exception as e:
+    except HTTPException:
+        raise
 
+    except Exception as e:
         logger.error(
             f"Error retrieving sales by region: {e}",
             exc_info=True,
@@ -531,25 +609,55 @@ def sales_by_region(
 
 @router.get("/dashboard/sales-by-category")
 def sales_by_category(
+    date_from: Optional[date] = Query(
+        default=None
+    ),
+    date_to: Optional[date] = Query(
+        default=None
+    ),
+    region: Optional[str] = Query(
+        default=None
+    ),
+    category: Optional[str] = Query(
+        default=None
+    ),
+    shipping_mode: Optional[str] = Query(
+        default=None
+    ),
     db: Session = Depends(get_db),
 ):
     """
-    Return total sales grouped by category.
+    Return total sales grouped by category
+    using the selected filters.
     """
 
     try:
+        validate_dashboard_dates(
+            date_from,
+            date_to,
+        )
+
+        query = db.query(
+            SalesRecord.category.label("category"),
+            func.coalesce(
+                func.sum(SalesRecord.sales),
+                0,
+            ).label("sales"),
+        ).filter(
+            SalesRecord.category.isnot(None)
+        )
+
+        query = apply_dashboard_filters(
+            query,
+            date_from,
+            date_to,
+            region,
+            category,
+            shipping_mode,
+        )
 
         results = (
-            db.query(
-                SalesRecord.category.label("category"),
-                func.coalesce(
-                    func.sum(SalesRecord.sales),
-                    0,
-                ).label("sales"),
-            )
-            .filter(
-                SalesRecord.category.isnot(None)
-            )
+            query
             .group_by(
                 SalesRecord.category
             )
@@ -561,31 +669,26 @@ def sales_by_category(
             .all()
         )
 
-        data = []
-
-        for row in results:
-
-            data.append(
-                {
-                    "category": str(row.category),
-                    "sales": round(
-                        float(row.sales or 0),
-                        2,
-                    ),
-                }
-            )
-
-        logger.info(
-            f"Sales by category returned {len(data)} rows"
-        )
+        data = [
+            {
+                "category": str(row.category),
+                "sales": round(
+                    float(row.sales or 0),
+                    2,
+                ),
+            }
+            for row in results
+        ]
 
         return {
             "data": data,
             "count": len(data),
         }
 
-    except Exception as e:
+    except HTTPException:
+        raise
 
+    except Exception as e:
         logger.error(
             f"Error retrieving sales by category: {e}",
             exc_info=True,
@@ -604,94 +707,87 @@ def sales_by_category(
 @router.get("/dashboard/sales-trend")
 def sales_trend(
     period: str = "month",
+    date_from: Optional[date] = Query(
+        default=None
+    ),
+    date_to: Optional[date] = Query(
+        default=None
+    ),
+    region: Optional[str] = Query(
+        default=None
+    ),
+    category: Optional[str] = Query(
+        default=None
+    ),
+    shipping_mode: Optional[str] = Query(
+        default=None
+    ),
     db: Session = Depends(get_db),
 ):
     """
-    Return sales grouped by month or year.
+    Return sales grouped by month or year
+    using the selected filters.
     """
 
     try:
+        validate_dashboard_dates(
+            date_from,
+            date_to,
+        )
 
         period = period.lower().strip()
 
-        if period not in ["month", "year"]:
+        if period not in [
+            "month",
+            "year",
+        ]:
             period = "month"
-
-        # ----------------------------------------------------
-        # MONTHLY SALES
-        # ----------------------------------------------------
 
         if period == "month":
 
-            results = (
-                db.query(
-                    func.strftime(
-                        "%Y-%m",
-                        SalesRecord.order_date,
-                    ).label("period"),
-
-                    func.coalesce(
-                        func.sum(
-                            SalesRecord.sales
-                        ),
-                        0,
-                    ).label("sales"),
-                )
-                .filter(
-                    SalesRecord.order_date.isnot(None)
-                )
-                .group_by(
-                    func.strftime(
-                        "%Y-%m",
-                        SalesRecord.order_date,
-                    )
-                )
-                .order_by(
-                    func.strftime(
-                        "%Y-%m",
-                        SalesRecord.order_date,
-                    )
-                )
-                .all()
+            period_expression = func.strftime(
+                "%Y-%m",
+                SalesRecord.order_date,
             )
-
-        # ----------------------------------------------------
-        # YEARLY SALES
-        # ----------------------------------------------------
 
         else:
 
-            results = (
-                db.query(
-                    func.strftime(
-                        "%Y",
-                        SalesRecord.order_date,
-                    ).label("period"),
-
-                    func.coalesce(
-                        func.sum(
-                            SalesRecord.sales
-                        ),
-                        0,
-                    ).label("sales"),
-                )
-                .filter(
-                    SalesRecord.order_date.isnot(None)
-                )
-                .group_by(
-                    func.strftime(
-                        "%Y",
-                        SalesRecord.order_date,
-                    )
-                )
-                .order_by(
-                    func.strftime(
-                        "%Y",
-                        SalesRecord.order_date,
-                    )
-                )
-                .all()
+            period_expression = func.strftime(
+                "%Y",
+                SalesRecord.order_date,
             )
+
+        query = db.query(
+            period_expression.label("period"),
+            func.coalesce(
+                func.sum(
+                    SalesRecord.sales
+                ),
+                0,
+            ).label("sales"),
+        ).filter(
+            SalesRecord.order_date.isnot(None)
+        )
+
+        query = apply_dashboard_filters(
+            query,
+            date_from,
+            date_to,
+            region,
+            category,
+            shipping_mode,
+        )
+
+        results = (
+            query
+            .group_by(
+                period_expression
+            )
+            .order_by(
+                period_expression
+            )
+            .all()
+        )
 
         data = []
 
@@ -710,18 +806,16 @@ def sales_trend(
                 }
             )
 
-        logger.info(
-            f"Sales trend returned {len(data)} rows"
-        )
-
         return {
             "data": data,
             "count": len(data),
             "period": period,
         }
 
-    except Exception as e:
+    except HTTPException:
+        raise
 
+    except Exception as e:
         logger.error(
             f"Error retrieving sales trend: {e}",
             exc_info=True,
@@ -730,6 +824,110 @@ def sales_trend(
         raise HTTPException(
             status_code=500,
             detail="Error retrieving sales trend",
+        )
+
+
+# ============================================================
+# TOP PRODUCTS
+# ============================================================
+
+@router.get("/dashboard/top-products")
+def top_products(
+    date_from: Optional[date] = Query(
+        default=None
+    ),
+    date_to: Optional[date] = Query(
+        default=None
+    ),
+    region: Optional[str] = Query(
+        default=None
+    ),
+    category: Optional[str] = Query(
+        default=None
+    ),
+    shipping_mode: Optional[str] = Query(
+        default=None
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Return top five products by sales
+    using the selected filters.
+    """
+
+    try:
+        validate_dashboard_dates(
+            date_from,
+            date_to,
+        )
+
+        query = db.query(
+            SalesRecord.product_name.label(
+                "product_name"
+            ),
+            func.coalesce(
+                func.sum(
+                    SalesRecord.sales
+                ),
+                0,
+            ).label("sales"),
+        ).filter(
+            SalesRecord.product_name.isnot(None)
+        )
+
+        query = apply_dashboard_filters(
+            query,
+            date_from,
+            date_to,
+            region,
+            category,
+            shipping_mode,
+        )
+
+        results = (
+            query
+            .group_by(
+                SalesRecord.product_name
+            )
+            .order_by(
+                func.sum(
+                    SalesRecord.sales
+                ).desc()
+            )
+            .limit(5)
+            .all()
+        )
+
+        data = [
+            {
+                "product_name": str(
+                    row.product_name
+                ),
+                "sales": round(
+                    float(row.sales or 0),
+                    2,
+                ),
+            }
+            for row in results
+        ]
+
+        return {
+            "data": data,
+            "count": len(data),
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.error(
+            f"Error retrieving top products: {e}",
+            exc_info=True,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Error retrieving top products",
         )
 
 
@@ -802,14 +1000,12 @@ def query(
         question = request.question.strip()
 
         if not question:
-
             raise HTTPException(
                 status_code=400,
                 detail="Question cannot be empty",
             )
 
         if len(question) > 1000:
-
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -847,7 +1043,9 @@ def query(
             dimensions_used=result["dimensions_used"],
             data=result["data"],
             chart=result["chart"],
-            execution_time_ms=result["execution_time_ms"],
+            execution_time_ms=result[
+                "execution_time_ms"
+            ],
             row_count=result["row_count"],
         )
 
@@ -896,7 +1094,6 @@ def register(
     )
 
     if len(full_name) < 2:
-
         raise HTTPException(
             status_code=400,
             detail="Full name is too short",
@@ -909,7 +1106,6 @@ def register(
     )
 
     if existing_email:
-
         raise HTTPException(
             status_code=400,
             detail="Email already registered",
@@ -922,7 +1118,6 @@ def register(
     )
 
     if existing_username:
-
         raise HTTPException(
             status_code=400,
             detail="Username already taken",
@@ -981,7 +1176,6 @@ def login(
     )
 
     if user is None:
-
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password",
@@ -991,14 +1185,12 @@ def login(
         request.password,
         user.hashed_password,
     ):
-
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password",
         )
 
     if not user.is_active:
-
         raise HTTPException(
             status_code=403,
             detail="User account is inactive",
