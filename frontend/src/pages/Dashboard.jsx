@@ -276,7 +276,6 @@ export default function Dashboard() {
     dateTo: '',
     region: '',
     category: '',
-    paymentMethod: '',
     shippingMode: '',
   })
 
@@ -372,11 +371,11 @@ export default function Dashboard() {
         trendResponse,
         productResponse,
       ] = await Promise.allSettled([
-        apiService.getDashboardKPIs(),
-        apiService.getSalesByRegion(),
-        apiService.getSalesByCategory(),
-        apiService.getSalesTrend('month'),
-        apiService.getTopProducts(),
+        apiService.getDashboardKPIs(filters),
+        apiService.getSalesByRegion(filters),
+        apiService.getSalesByCategory(filters),
+        apiService.getSalesTrend('month', filters),
+        apiService.getTopProducts(filters),
       ])
 
       if (kpiResponse.status === 'fulfilled') {
@@ -469,7 +468,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadDashboard()
-  }, [])
+  }, [
+    filters.dateFrom,
+    filters.dateTo,
+    filters.region,
+    filters.category,
+    filters.shippingMode,
+  ])
 
 
   /* =======================================================
@@ -491,8 +496,7 @@ export default function Dashboard() {
       dateTo: '',
       region: '',
       category: '',
-      paymentMethod: '',
-      shippingMode: '',
+        shippingMode: '',
     })
   }
 
@@ -1405,17 +1409,6 @@ export default function Dashboard() {
                   <option value="Technology">Technology</option>
                   <option value="Furniture">Furniture</option>
                   <option value="Office Supplies">Office Supplies</option>
-                </select>
-              </div>
-              <div className="dashboard-filter-group">
-                <label htmlFor="paymentMethod">Payment Method</label>
-                <select id="paymentMethod" name="paymentMethod" value={filters.paymentMethod} onChange={handleFilterChange}>
-                  <option value="">All Payments</option>
-                  <option value="UPI">UPI</option>
-                  <option value="Cash">Cash</option>
-                  <option value="Credit Card">Credit Card</option>
-                  <option value="Debit Card">Debit Card</option>
-                  <option value="Net Banking">Net Banking</option>
                 </select>
               </div>
               <div className="dashboard-filter-group">
